@@ -9,7 +9,7 @@ async function getToken() {
   const row = db.prepare("SELECT * FROM bw_tokens WHERE id = 1").get();
 
   // Token still valid (with 1hr buffer)
-  if (row && row.access_token && row.expires_at > Date.now()) {
+  if (row && row.access_token && row.expires_at > Date.now()) {h
     return row.access_token;
   }
 
