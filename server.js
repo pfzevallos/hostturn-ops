@@ -1,4 +1,4 @@
-require("dotenv").config();
+hrequire("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const cron = require("node-cron");
@@ -228,7 +228,7 @@ app.post("/api/sync/properties", async (req, res) => {
 // Debug: see raw Breezeway property API response
 app.get("/api/debug/bw-properties", async (req, res) => {
   try {
-    const data = await bw.bwFetch("/property/");
+    const data = await bw.bwFetch("/property");
     const isArr = Array.isArray(data);
     const keys = isArr ? ["(array)"] : Object.keys(data || {});
     const count = isArr ? data.length : (data.results?.length || data.data?.length || "unknown");
