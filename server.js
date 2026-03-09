@@ -102,10 +102,10 @@ app.get("/api/contacts", (req, res) => {
 
 app.post("/api/contacts", (req, res) => {
   const db = getDb();
-  const { name, phone, role, lang, properties, notes } = req.body;
+  const { name, phone, email, role, lang, properties, notes } = req.body;
   const id = "c" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-  db.prepare("INSERT INTO contacts (id, name, phone, role, lang, properties, notes) VALUES (?, ?, ?, ?, ?, ?, ?)")
-    .run(id, name, phone, role || "cleaner", lang || "en", properties, notes);
+  db.prepare("INSERT INTO contacts (id, name, phone, email, role, lang, properties, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+    .run(id, name, phone, email, role || "cleaner", lang || "en", properties, notes);
   res.json({ id });
 });
 
@@ -223,6 +223,18 @@ app.get("/api/payments/summary", (req, res) => {
 app.post("/api/sync/properties", async (req, res) => {
   try { const data = await bw.syncProperties(); res.json({ count: data.length }); }
   catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Debug: see raw Breezeway property API response
+app.get("/api/debug/bw-properties", async (req, res) => {
+  try {
+    const data = await bw.bwFetch("/property/");
+    const isArr = Array.isArray(data);
+    const keys = isArr ? ["(array)"] : Object.keys(data || {});
+    const count = isArr ? data.length : (data.results?.length || data.data?.length || "unknown");
+    const sample = isArr ? data[0] : (data.results?.[0] || data.data?.[0] || data[Object.keys(data)[0]]);
+    res.json({ isArray: isArr, topLevelKeys: keys, count, sampleKeys: sample ? Object.keys(sample) : [], sample: sample ? JSON.stringify(sample).substring(0, 500) : null });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.post("/api/sync/tasks", async (req, res) => {

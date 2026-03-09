@@ -68,8 +68,32 @@ async function bwFetch(path) {
 
 // Fetch and cache all properties
 async function syncProperties() {
-  const data = await bwFetch("/property");
-  if (!Array.isArray(data)) return [];
+  const rawData = await bwFetch("/property/");
+  console.log("[BW] Raw property response type:", typeof rawData, Array.isArray(rawData) ? "array" : "object", "keys:", Object.keys(rawData || {}).slice(0, 10));
+  
+  // Handle various response formats
+  let data;
+  if (Array.isArray(rawData)) {
+    data = rawData;
+  } else if (rawData && typeof rawData === "object") {
+    // Try common wrapper keys
+    data = rawData.results || rawData.data || rawData.properties || rawData.items || [];
+    if (!Array.isArray(data)) {
+      // Maybe it's a single property or the object itself contains property-like data
+      console.log("[BW] Could not find array in response. Sample keys:", JSON.stringify(Object.keys(rawData)).substring(0, 200));
+      data = Object.values(rawData).find(v => Array.isArray(v)) || [];
+    }
+  } else {
+    data = [];
+  }
+  
+  console.log("[BW] Parsed", data.length, "properties");
+  if (data.length > 0) {
+    console.log("[BW] First property keys:", Object.keys(data[0]).join(", "));
+    console.log("[BW] First property sample:", JSON.stringify(data[0]).substring(0, 300));
+  }
+  
+  if (!data.length) return [];
   const db = getDb();
   const upsert = db.prepare(`
     INSERT INTO properties (id, name, group_name, address, beds, baths, bw_data, updated_at)
