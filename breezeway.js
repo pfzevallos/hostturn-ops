@@ -9,7 +9,7 @@ async function getToken() {
   const row = db.prepare("SELECT * FROM bw_tokens WHERE id = 1").get();
 
   // Token still valid (with 1hr buffer)
-  if (row && row.access_token && row.expires_at > Date.now()) {h
+  if (row && row.access_token && row.expires_at > Date.now()) {
     return row.access_token;
   }
 
@@ -68,7 +68,7 @@ async function bwFetch(path) {
 
 // Fetch and cache all properties
 async function syncProperties() {
- const rawData = await bwFetch("/property");
+  const rawData = await bwFetch("/property");
   console.log("[BW] Raw property response type:", typeof rawData, Array.isArray(rawData) ? "array" : "object", "keys:", Object.keys(rawData || {}).slice(0, 10));
   
   // Handle various response formats
