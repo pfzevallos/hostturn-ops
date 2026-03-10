@@ -102,7 +102,9 @@ async function syncProperties() {
   `);
   const insertMany = db.transaction(() => {
     for (const p of data) {
-      const vals = [p.id, p.name, p.group_name || "", p.address || "", p.bedrooms || 0, p.bathrooms || 0, JSON.stringify(p)];
+      const groupName = p.group_name || (p.groups && p.groups[0] && p.groups[0].name) || "";
+      const address = p.address || p.address1 || "";
+      const vals = [p.id, p.name || p.display || "", groupName, address, p.bedrooms || 0, p.bathrooms || 0, JSON.stringify(p)];
       upsert.run(...vals, ...vals.slice(1));
     }
   });
@@ -123,7 +125,9 @@ async function syncTasksForDate(date) {
   const allTasks = [];
   for (const prop of props) {
     try {
-      const tasks = await bwFetch(`/task/?home_id=${prop.id}`);
+      const rawTasks = await bwFetch(`/task/?home_id=${prop.id}`);
+      // Handle paginated response - tasks may be in results wrapper
+      const tasks = Array.isArray(rawTasks) ? rawTasks : (rawTasks.results || rawTasks.data || rawTasks.tasks || []);
       if (Array.isArray(tasks)) {
         for (const t of tasks) {
           const taskDate = t.scheduled_date || t.deadline || "";
