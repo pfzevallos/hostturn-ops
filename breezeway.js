@@ -104,7 +104,7 @@ async function syncProperties() {
     for (const p of data) {
       const groupName = p.group_name || (p.groups && p.groups[0] && p.groups[0].name) || "";
       const address = p.address || p.address1 || "";
-      const vals = [p.id, p.name || p.display || "", groupName, address, p.bedrooms || 0, p.bathrooms || 0, JSON.stringify(p)];
+      const vals = [String(parseInt(p.id, 10)), p.name || p.display || "", groupName, address, p.bedrooms || 0, p.bathrooms || 0, JSON.stringify(p)];
       upsert.run(...vals, ...vals.slice(1));
     }
   });
@@ -125,7 +125,7 @@ async function syncTasksForDate(date) {
   const allTasks = [];
   for (const prop of props) {
     try {
-      const rawTasks = await bwFetch(`/task/?home_id=${prop.id}`);
+      const rawTasks = await bwFetch(`/task?home_id=${parseInt(prop.id, 10)}`);
       // Handle paginated response - tasks may be in results wrapper
       const tasks = Array.isArray(rawTasks) ? rawTasks : (rawTasks.results || rawTasks.data || rawTasks.tasks || []);
       if (Array.isArray(tasks)) {
@@ -225,7 +225,7 @@ function handleWebhook(event, taskData) {
   }
 
   if (event === "task-updated" || event === "task-assignment-updated") {
-    const cleaner = taskData.assignees?.[0]?.full_name || job.cleaner_name;
+    const cleaner = taskData.assignments?.[0]?.name || taskData.assignees?.[0]?.full_name || job.cleaner_name;
     const status = taskData.status?.name || taskData.status?.code || job.bw_status;
     db.prepare("UPDATE jobs SET bw_status = ?, cleaner_name = ?, updated_at = datetime('now') WHERE id = ?")
       .run(status, cleaner, job.id);
