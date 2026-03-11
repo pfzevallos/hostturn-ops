@@ -93,8 +93,8 @@
           const init = j.cleaner_name ? j.cleaner_name.split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase() : '??';
           const sc = j.bw_status==='completed'?'completed':j.bw_status==='started'?'started':j.bw_status?'pending':'scheduled';
           const st = j.bw_status||'Scheduled';
-          const pn = j.property_name.split(' - ')[0];
-          const gn = j.group_name || j.property_name.split(' - ').slice(1).join(' - ') || '';
+          const pn = j.property_name;
+          const gn = j.group_name || '';
           return '<div class="job-card"><div><div class="prop">'+pn+'</div><div class="group">'+gn+'</div></div><div class="cleaner"><div class="avatar">'+init+'</div><div class="name">'+(j.cleaner_name||'Unassigned')+'</div></div><div><span class="badge '+sc+'">'+st+'</span></div><div class="time">'+(j.expected_arrival||'—')+'</div></div>';
         }).join('');
       } catch(e) { document.getElementById('jobs').innerHTML='<div class="empty"><p>Error: '+e.message+'</p></div>'; }
