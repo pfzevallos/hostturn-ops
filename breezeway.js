@@ -156,7 +156,7 @@ async function syncTasksForDate(date) {
       const id = existing ? existing.id : "j" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
       const propDb = db.prepare("SELECT * FROM properties WHERE id = ?").get(t._prop.id);
       const cleaner = t.assignments?.[0]?.name || t.assignees?.[0]?.full_name || existing?.cleaner_name || "";
-      const status = t.status?.name || t.status?.code || "";
+      const typeStatus = typeof t.type_task_status === 'string' ? JSON.parse(t.type_task_status || '{}') : (t.type_task_status || {}); const status = typeStatus.name || typeStatus.code || t.status?.name || t.status?.code || "";
       const startedAt = t.started_at || existing?.bw_started_at || null;
       const completedAt = t.completed_at || existing?.bw_completed_at || null;
       const desc = t.description || existing?.task_notes || "";
