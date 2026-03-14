@@ -22,6 +22,11 @@
     .stat .value { font-size:28px; font-weight:700; font-family:'JetBrains Mono',monospace; }
     .stat .value.green { color:var(--accent); }
     .stat .value.blue { color:var(--blue); }
+    .tabs { display:flex; gap:4px; margin-bottom:20px; }
+    .tab { padding:10px 20px; border-radius:8px; font-weight:600; font-size:14px; cursor:pointer; color:var(--text2); background:var(--surface); border:1px solid var(--border); transition:all 0.2s; }
+    .tab:hover { color:var(--text); border-color:var(--text2); }
+    .tab.active { background:var(--accent); color:#000; border-color:var(--accent); }
+    .tab .count { font-family:'JetBrains Mono',monospace; font-size:12px; margin-left:6px; opacity:0.7; }
     .section-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
     .section-header h2 { font-size:16px; font-weight:600; }
     .section-header .date { font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--text2); margin-right:12px; }
@@ -38,8 +43,9 @@
     .job-card .cleaner .name { font-weight:500; font-size:14px; }
     .badge { display:inline-block; padding:4px 10px; border-radius:20px; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; }
     .badge.pending { background:rgba(245,158,11,0.15); color:var(--warn); }
+    .badge.created { background:rgba(59,130,246,0.15); color:var(--blue); }
     .badge.started { background:rgba(59,130,246,0.15); color:var(--blue); }
-    .badge.completed { background:rgba(34,197,94,0.15); color:var(--accent); }
+    .badge.completed, .badge.finished { background:rgba(34,197,94,0.15); color:var(--accent); }
     .badge.scheduled { background:rgba(139,143,168,0.15); color:var(--text2); }
     .time { font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--text2); }
     .empty { text-align:center; padding:60px 20px; color:var(--text2); }
@@ -63,10 +69,14 @@
       <div class="stat"><div class="label">Cleaners Active</div><div class="value" id="s-cleaners">-</div></div>
       <div class="stat"><div class="label">Completed</div><div class="value green" id="s-done">-</div></div>
     </div>
+    <div class="tabs">
+      <div class="tab active" id="tab-today" onclick="switchTab('today')">Today <span class="count" id="count-today">—</span></div>
+      <div class="tab" id="tab-tomorrow" onclick="switchTab('tomorrow')">Tomorrow <span class="count" id="count-tomorrow">—</span></div>
+    </div>
     <div class="section-header">
-      <h2>Today's Schedule</h2>
+      <h2 id="schedule-title">Today's Schedule</h2>
       <div class="actions">
-        <span class="date" id="today-date"></span>
+        <span class="date" id="display-date"></span>
         <button class="btn" id="sync-btn" onclick="syncTasks()">Sync Breezeway</button>
       </div>
     </div>
@@ -75,45 +85,90 @@
     </div>
   </div>
   <script>
-    const today = (() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); })();
-    document.getElementById('today-date').textContent = new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
-    
-    async function loadJobs() {
+    function getLocalDate(offset) {
+      const d = new Date();
+      if (offset) d.setDate(d.getDate() + offset);
+      return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    }
+    function formatDate(dateStr) {
+      return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {weekday:'long', month:'long', day:'numeric', year:'numeric'});
+    }
+    const todayDate = getLocalDate(0);
+    const tomorrowDate = getLocalDate(1);
+    let currentTab = 'today';
+    let todayJobs = [];
+    let tomorrowJobs = [];
+
+    function switchTab(tab) {
+      currentTab = tab;
+      document.getElementById('tab-today').className = tab === 'today' ? 'tab active' : 'tab';
+      document.getElementById('tab-tomorrow').className = tab === 'tomorrow' ? 'tab active' : 'tab';
+      document.getElementById('schedule-title').textContent = tab === 'today' ? "Today's Schedule" : "Tomorrow's Schedule";
+      document.getElementById('display-date').textContent = formatDate(tab === 'today' ? todayDate : tomorrowDate);
+      renderJobs();
+    }
+
+    function renderJobs() {
+      const jobs = currentTab === 'today' ? todayJobs : tomorrowJobs;
+      const el = document.getElementById('jobs');
+      if (!jobs.length) {
+        const label = currentTab === 'today' ? 'today' : 'tomorrow';
+        el.innerHTML = '<div class="empty"><div class="icon">📋</div><p>No jobs scheduled for ' + label + '.<br>Click "Sync Breezeway" to pull tasks.</p></div>';
+        return;
+      }
+      el.innerHTML = jobs.map(function(j) {
+        var init = j.cleaner_name ? j.cleaner_name.split(' ').map(function(w){return w[0]}).join('').substring(0,2).toUpperCase() : '??';
+        var st = j.bw_status || 'Scheduled';
+        var sl = st.toLowerCase();
+        var sc = (sl === 'completed' || sl === 'finished') ? 'completed' : sl === 'started' ? 'started' : sl === 'created' ? 'created' : st !== 'Scheduled' ? 'pending' : 'scheduled';
+        return '<div class="job-card"><div><div class="prop">' + j.property_name + '</div><div class="group">' + (j.group_name || '') + '</div></div><div class="cleaner"><div class="avatar">' + init + '</div><div class="name">' + (j.cleaner_name || 'Unassigned') + '</div></div><div><span class="badge ' + sc + '">' + st + '</span></div><div class="time">' + (j.expected_arrival || '—') + '</div></div>';
+      }).join('');
+    }
+
+    async function loadAllJobs() {
       try {
-        const jobs = await (await fetch('/api/jobs?date='+today)).json();
-        const cleaners = [...new Set(jobs.filter(j=>j.cleaner_name).map(j=>j.cleaner_name))];
-        const done = jobs.filter(j=>j.bw_status==='completed').length;
-        document.getElementById('s-jobs').textContent = jobs.length;
-        document.getElementById('s-done').textContent = done+'/'+jobs.length;
+        var results = await Promise.all([
+          fetch('/api/jobs?date=' + todayDate).then(function(r){return r.json()}),
+          fetch('/api/jobs?date=' + tomorrowDate).then(function(r){return r.json()})
+        ]);
+        todayJobs = results[0];
+        tomorrowJobs = results[1];
+        var cleaners = [];
+        todayJobs.forEach(function(j){ if(j.cleaner_name && cleaners.indexOf(j.cleaner_name)===-1) cleaners.push(j.cleaner_name); });
+        var done = todayJobs.filter(function(j){ var s=(j.bw_status||'').toLowerCase(); return s==='completed'||s==='finished'; }).length;
+        document.getElementById('s-jobs').textContent = todayJobs.length;
+        document.getElementById('s-done').textContent = done + '/' + todayJobs.length;
         document.getElementById('s-cleaners').textContent = cleaners.length;
-        try { const p=await(await fetch('/api/debug/bw-properties')).json(); document.getElementById('s-props').textContent=p.count||'--'; } catch(e){}
-        const el = document.getElementById('jobs');
-        if (!jobs.length) { el.innerHTML='<div class="empty"><div class="icon">📋</div><p>No jobs scheduled for today.<br>Click "Sync Breezeway" to pull tasks.</p></div>'; return; }
-        el.innerHTML = jobs.map(j => {
-          const init = j.cleaner_name ? j.cleaner_name.split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase() : '??';
-          const sc = j.bw_status==='completed'?'completed':j.bw_status==='started'?'started':j.bw_status?'pending':'scheduled';
-          const st = j.bw_status||'Scheduled';
-          const pn = j.property_name;
-          const gn = j.group_name || '';
-          return '<div class="job-card"><div><div class="prop">'+pn+'</div><div class="group">'+gn+'</div></div><div class="cleaner"><div class="avatar">'+init+'</div><div class="name">'+(j.cleaner_name||'Unassigned')+'</div></div><div><span class="badge '+sc+'">'+st+'</span></div><div class="time">'+(j.expected_arrival||'—')+'</div></div>';
-        }).join('');
-      } catch(e) { document.getElementById('jobs').innerHTML='<div class="empty"><p>Error: '+e.message+'</p></div>'; }
+        document.getElementById('count-today').textContent = todayJobs.length;
+        document.getElementById('count-tomorrow').textContent = tomorrowJobs.length;
+        try { var p = await (await fetch('/api/debug/bw-properties')).json(); document.getElementById('s-props').textContent = p.count || '--'; } catch(e){}
+        renderJobs();
+      } catch(e) {
+        document.getElementById('jobs').innerHTML = '<div class="empty"><p>Error: ' + e.message + '</p></div>';
+      }
     }
-    
+
     async function syncTasks() {
-      const btn=document.getElementById('sync-btn');
-      btn.disabled=true; btn.textContent='Syncing...';
+      var btn = document.getElementById('sync-btn');
+      btn.disabled = true; btn.textContent = 'Syncing...';
       try {
-        await fetch('/api/sync/properties',{method:'POST'});
-        const d=await(await fetch('/api/sync/tasks',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({date:today})})).json();
-        btn.textContent='Synced '+d.count+' tasks!';
-        setTimeout(()=>{btn.textContent='Sync Breezeway';btn.disabled=false;},3000);
-        loadJobs();
-      } catch(e) { btn.textContent='Error!'; setTimeout(()=>{btn.textContent='Sync Breezeway';btn.disabled=false;},3000); }
+        await fetch('/api/sync/properties', {method:'POST'});
+        var results = await Promise.all([
+          fetch('/api/sync/tasks', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:todayDate})}).then(function(r){return r.json()}),
+          fetch('/api/sync/tasks', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:tomorrowDate})}).then(function(r){return r.json()})
+        ]);
+        btn.textContent = 'Synced ' + results[0].count + ' today + ' + results[1].count + ' tomorrow!';
+        setTimeout(function(){ btn.textContent = 'Sync Breezeway'; btn.disabled = false; }, 3000);
+        loadAllJobs();
+      } catch(e) {
+        btn.textContent = 'Error!';
+        setTimeout(function(){ btn.textContent = 'Sync Breezeway'; btn.disabled = false; }, 3000);
+      }
     }
-    
-    loadJobs();
-    setInterval(loadJobs,60000);
+
+    document.getElementById('display-date').textContent = formatDate(todayDate);
+    loadAllJobs();
+    setInterval(loadAllJobs, 60000);
   </script>
 </body>
 </html>
