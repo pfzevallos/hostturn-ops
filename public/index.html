@@ -75,7 +75,7 @@
     </div>
   </div>
   <script>
-    const today = new Date(new Date().toLocaleString('en-US', {timeZone: 'America/New_York'})).toISOString().split('T')[0];
+    const today = (() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); })();
     document.getElementById('today-date').textContent = new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
     
     async function loadJobs() {
