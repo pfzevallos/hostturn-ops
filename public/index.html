@@ -45,7 +45,7 @@
     .badge.pending { background:rgba(245,158,11,0.15); color:var(--warn); }
     .badge.created { background:rgba(59,130,246,0.15); color:var(--blue); }
     .badge.started { background:rgba(59,130,246,0.15); color:var(--blue); }
-    .badge.completed, .badge.finished { background:rgba(34,197,94,0.15); color:var(--accent); }
+    .badge.completed, .badge.finished, .badge.closed { background:rgba(34,197,94,0.15); color:var(--accent); }
     .badge.scheduled { background:rgba(139,143,168,0.15); color:var(--text2); }
     .time { font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--text2); }
     .empty { text-align:center; padding:60px 20px; color:var(--text2); }
@@ -135,7 +135,7 @@
         tomorrowJobs = results[1];
         var cleaners = [];
         todayJobs.forEach(function(j){ if(j.cleaner_name && cleaners.indexOf(j.cleaner_name)===-1) cleaners.push(j.cleaner_name); });
-        var done = todayJobs.filter(function(j){ var s=(j.bw_status||'').toLowerCase(); return s==='completed'||s==='finished'; }).length;
+        var done = todayJobs.filter(function(j){ var s=(j.bw_status||'').toLowerCase(); return s==='completed'||s==='finished'||s==='closed'||s==='closed'; }).length;
         document.getElementById('s-jobs').textContent = todayJobs.length;
         document.getElementById('s-done').textContent = done + '/' + todayJobs.length;
         document.getElementById('s-cleaners').textContent = cleaners.length;
