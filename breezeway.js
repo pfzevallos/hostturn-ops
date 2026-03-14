@@ -93,6 +93,7 @@ async function syncProperties() {
     console.log("[BW] First property sample:", JSON.stringify(data[0]).substring(0, 300));
   }
   
+  data = data.filter(p => p.status !== "inactive");
   if (!data.length) return [];
   const db = getDb();
   const upsert = db.prepare(`
