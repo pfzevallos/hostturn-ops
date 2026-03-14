@@ -141,7 +141,7 @@ async function syncTasksForDate(date) {
     }
   }
 
-  // Upsert jobs
+  // Remove stale jobs that no longer exist in Breezeway
   const upsert = db.prepare(`
     INSERT INTO jobs (id, date, bw_task_id, property_id, property_name, group_name, cleaner_name,
       checkout_time, expected_arrival, rate, task_notes, bw_status, bw_started_at, bw_completed_at, is_checkout_day, updated_at)
