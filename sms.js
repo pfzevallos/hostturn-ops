@@ -172,9 +172,31 @@ async function handleIncomingSMS(from, body, twilioData) {
     return { action: "escalated", analysis };
   }
 
-  // If it's a confirmation, log it
+  // If it's a confirmation, mark their upcoming jobs as confirmed
   if (analysis.isConfirmation) {
     console.log(`[SMS IN] Confirmation from ${contact.name}: ${body}`);
+    // Check tomorrow's jobs first, then today's
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowDate = tomorrow.toISOString().split("T")[0];
+    const tomorrowJobs = db.prepare(
+      "SELECT * FROM jobs WHERE date = ? AND cleaner_name = ? AND schedule_sent_at IS NOT NULL AND confirmed_at IS NULL"
+    ).all(tomorrowDate, contact.name);
+    
+    if (tomorrowJobs.length) {
+      for (const j of tomorrowJobs) {
+        db.prepare("UPDATE jobs SET confirmed_at = datetime('now') WHERE id = ?").run(j.id);
+      }
+      console.log(`[SMS IN] Marked ${tomorrowJobs.length} tomorrow jobs as confirmed for ${contact.name}`);
+    } else {
+      // Check today's jobs
+      const todayJobs2 = db.prepare(
+        "SELECT * FROM jobs WHERE date = ? AND cleaner_name = ? AND schedule_sent_at IS NOT NULL AND confirmed_at IS NULL"
+      ).all(today, contact.name);
+      for (const j of todayJobs2) {
+        db.prepare("UPDATE jobs SET confirmed_at = datetime('now') WHERE id = ?").run(j.id);
+      }
+    }
     return { action: "confirmed", analysis };
   }
 
