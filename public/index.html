@@ -110,6 +110,25 @@
       document.getElementById('schedule-title').textContent = tab === 'today' ? "Today's Schedule" : "Tomorrow's Schedule";
       document.getElementById('display-date').textContent = formatDate(tab === 'today' ? todayDate : tomorrowDate);
       document.getElementById('send-btn').style.display = tab === 'tomorrow' ? 'inline-flex' : 'none';
+      // Update send button text based on whether schedule was already sent
+      if (tab === 'tomorrow' && tomorrowJobs.length) {
+        var allSent = tomorrowJobs.filter(function(j){return j.cleaner_name}).every(function(j){return j.schedule_sent_at});
+        var allConfirmed = tomorrowJobs.filter(function(j){return j.cleaner_name}).every(function(j){return j.confirmed_at});
+        var btn = document.getElementById('send-btn');
+        if (allConfirmed) {
+          btn.textContent = '✅ All Confirmed';
+          btn.style.background = 'var(--accent)';
+          btn.style.color = '#000';
+        } else if (allSent) {
+          btn.textContent = '📩 Resend Schedule';
+          btn.style.background = 'var(--warn)';
+          btn.style.color = '#000';
+        } else {
+          btn.textContent = '📩 Send Schedule to Cleaners';
+          btn.style.background = 'var(--blue)';
+          btn.style.color = '#fff';
+        }
+      }
       renderJobs();
     }
 
@@ -126,7 +145,13 @@
         var st = j.bw_status || 'Scheduled';
         var sl = st.toLowerCase();
         var sc = (sl==='completed'||sl==='finished'||sl==='closed') ? 'completed' : sl==='started' ? 'started' : sl==='created' ? 'created' : st!=='Scheduled' ? 'pending' : 'scheduled';
-        return '<div class="job-card"><div><div class="prop">' + j.property_name + '</div><div class="group">' + (j.group_name || '') + '</div></div><div class="cleaner"><div class="avatar">' + init + '</div><div class="name">' + (j.cleaner_name || 'Unassigned') + '</div></div><div><span class="badge ' + sc + '">' + st + '</span></div><div class="time">' + (j.expected_arrival || '') + '</div></div>';
+        var smsStatus = '';
+        if (j.confirmed_at) {
+          smsStatus = '<span style="font-size:11px;color:var(--accent);margin-left:4px" title="Confirmed">✅ Confirmed</span>';
+        } else if (j.schedule_sent_at) {
+          smsStatus = '<span style="font-size:11px;color:var(--warn);margin-left:4px" title="Sent, awaiting confirmation">📩 Sent</span>';
+        }
+        return '<div class="job-card"><div><div class="prop">' + j.property_name + '</div><div class="group">' + (j.group_name || '') + '</div></div><div class="cleaner"><div class="avatar">' + init + '</div><div><div class="name">' + (j.cleaner_name || 'Unassigned') + '</div>' + smsStatus + '</div></div><div><span class="badge ' + sc + '">' + st + '</span></div><div class="time">' + (j.expected_arrival || '') + '</div></div>';
       }).join('');
     }
 
