@@ -178,6 +178,10 @@ function initTables() {
     const insertMany = db.transaction(() => { for (const t of tpls) ins.run(...t); });
     insertMany();
   }
+
+  // Add new columns if they don't exist (safe migration)
+  try { db.exec("ALTER TABLE jobs ADD COLUMN schedule_sent_at TEXT"); } catch(e) {}
+  try { db.exec("ALTER TABLE jobs ADD COLUMN confirmed_at TEXT"); } catch(e) {}
 }
 
 module.exports = { getDb };
