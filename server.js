@@ -246,6 +246,85 @@ app.post("/api/sync/tasks", async (req, res) => {
 });
 
 app.post("/api/breezeway/subscribe-webhook", async (req, res) => {
+
+// --- Send schedule to cleaners ---
+app.post("/api/send-schedule", async (req, res) => {
+  try {
+    const db = getDb();
+    const date = req.body.date;
+    if (!date) return res.status(400).json({ error: "date required" });
+    
+    // Get all jobs for the date
+    const jobs = db.prepare("SELECT * FROM jobs WHERE date = ? ORDER BY cleaner_name, expected_arrival").all(date);
+    if (!jobs.length) return res.json({ sent: 0, error: "No jobs for " + date });
+    
+    // Group by cleaner
+    const byClean = {};
+    for (const j of jobs) {
+      const name = j.cleaner_name || "Unassigned";
+      if (name === "Unassigned") continue;
+      if (!byClean[name]) byClean[name] = [];
+      byClean[name].push(j);
+    }
+    
+    // Get cleaner contacts
+    const contacts = db.prepare("SELECT * FROM contacts WHERE role = 'cleaner'").all();
+    const results = [];
+    
+    for (const [cleanerName, cleanerJobs] of Object.entries(byClean)) {
+      // Find contact - try exact match first, then partial
+      let contact = contacts.find(c => c.name === cleanerName);
+      if (!contact) contact = contacts.find(c => cleanerName.includes(c.name) || c.name.includes(cleanerName));
+      
+      if (!contact || !contact.phone) {
+        results.push({ cleaner: cleanerName, status: "no_phone", error: "No phone number found" });
+        continue;
+      }
+      
+      // Build schedule message with friendly greeting
+      const isSpanish = contact.lang === "es";
+      const dateStr = new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
+      
+      // Get first name (use nickname if available)
+      const nicknames = { "Byron Ramos": "David", "Magiber Duche": "Magiber" };
+      const firstName = nicknames[cleanerName] || cleanerName.split(" ")[0];
+      
+      // Time-appropriate greeting
+      const hour = new Date().getHours();
+      let greetEn, greetEs;
+      if (hour < 12) { greetEn = "Good morning"; greetEs = "Buenos días"; }
+      else if (hour < 18) { greetEn = "Good afternoon"; greetEs = "Buenas tardes"; }
+      else { greetEn = "Good evening"; greetEs = "Buenas noches"; }
+      
+      let msg;
+      if (isSpanish) {
+        const dateStrEs = new Date(date + "T12:00:00").toLocaleDateString("es", { weekday: "long", month: "short", day: "numeric" });
+        msg = `${greetEs} ${firstName}! Tu horario de HostTurn para ${dateStrEs}:\n\n`;
+        cleanerJobs.forEach((j, i) => {
+          msg += `${i + 1}. ${j.property_name}\n`;
+        });
+        msg += `\nTotal: ${cleanerJobs.length} trabajo(s). Confirma con SI. Gracias!`;
+      } else {
+        msg = `${greetEn} ${firstName}! Here's your HostTurn schedule for ${dateStr}:\n\n`;
+        cleanerJobs.forEach((j, i) => {
+          msg += `${i + 1}. ${j.property_name}\n`;
+        });
+        msg += `\nTotal: ${cleanerJobs.length} job(s). Reply YES to confirm. Thanks!`;
+      }
+      
+      try {
+        await sms.sendSMS(contact.phone, msg, null, "cleaner_sched", contact.lang || "en");
+        results.push({ cleaner: cleanerName, status: "sent", phone: contact.phone, jobs: cleanerJobs.length });
+      } catch (e) {
+        results.push({ cleaner: cleanerName, status: "error", error: e.message });
+      }
+    }
+    
+    res.json({ sent: results.filter(r => r.status === "sent").length, total: results.length, results });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post("/api/breezeway/subscribe-webhook", async (req, res) => {
   try {
     const url = `${process.env.BASE_URL}/webhook/breezeway`;
     const result = await bw.subscribeWebhook(url);
