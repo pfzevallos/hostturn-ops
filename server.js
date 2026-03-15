@@ -246,6 +246,12 @@ app.post("/api/sync/tasks", async (req, res) => {
 });
 
 app.post("/api/breezeway/subscribe-webhook", async (req, res) => {
+  try {
+    const url = `${process.env.BASE_URL}/webhook/breezeway`;
+    const result = await bw.subscribeWebhook(url);
+    res.json(result);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // --- Send schedule to cleaners ---
 app.post("/api/send-schedule", async (req, res) => {
