@@ -320,6 +320,10 @@ app.post("/api/send-schedule", async (req, res) => {
       
       try {
         await sms.sendSMS(contact.phone, msg, null, "cleaner_sched", contact.lang || "en");
+        // Mark all jobs for this cleaner as schedule sent
+        for (const j of cleanerJobs) {
+          db.prepare("UPDATE jobs SET schedule_sent_at = datetime('now') WHERE id = ?").run(j.id);
+        }
         results.push({ cleaner: cleanerName, status: "sent", phone: contact.phone, jobs: cleanerJobs.length });
       } catch (e) {
         results.push({ cleaner: cleanerName, status: "error", error: e.message });
