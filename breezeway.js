@@ -68,32 +68,25 @@ async function bwFetch(path) {
 
 // Fetch and cache all properties
 async function syncProperties() {
-  const rawData = await bwFetch("/property");
-  console.log("[BW] Raw property response type:", typeof rawData, Array.isArray(rawData) ? "array" : "object", "keys:", Object.keys(rawData || {}).slice(0, 10));
-  
-  // Handle various response formats
-  let data;
-  if (Array.isArray(rawData)) {
-    data = rawData;
-  } else if (rawData && typeof rawData === "object") {
-    // Try common wrapper keys
-    data = rawData.results || rawData.data || rawData.properties || rawData.items || [];
-    if (!Array.isArray(data)) {
-      // Maybe it's a single property or the object itself contains property-like data
-      console.log("[BW] Could not find array in response. Sample keys:", JSON.stringify(Object.keys(rawData)).substring(0, 200));
-      data = Object.values(rawData).find(v => Array.isArray(v)) || [];
-    }
-  } else {
-    data = [];
+  // Fetch all pages of properties
+  let allData = [];
+  let page = 1;
+  let totalPages = 1;
+  while (page <= totalPages) {
+    const rawData = await bwFetch("/property?limit=100&page=" + page);
+    const pageResults = rawData.results || rawData.data || [];
+    allData = allData.concat(pageResults);
+    totalPages = rawData.total_pages || 1;
+    console.log("[BW] Fetched property page " + page + "/" + totalPages + " (" + pageResults.length + " results)");
+    page++;
   }
   
-  console.log("[BW] Parsed", data.length, "properties");
-  if (data.length > 0) {
-    console.log("[BW] First property keys:", Object.keys(data[0]).join(", "));
-    console.log("[BW] First property sample:", JSON.stringify(data[0]).substring(0, 300));
-  }
+  let data = allData;
   
+  // Filter out inactive properties
   data = data.filter(p => p.status !== "inactive");
+  console.log("[BW] Total:", allData.length, "Active:", data.length, "properties");
+  
   if (!data.length) return [];
   const db = getDb();
   const upsert = db.prepare(`
@@ -105,7 +98,7 @@ async function syncProperties() {
     for (const p of data) {
       const groupName = p.group_name || (p.groups && p.groups[0] && p.groups[0].name) || "";
       const address = p.address || p.address1 || "";
-      const vals = [String(parseInt(p.id, 10)), p.name || p.display || "", groupName, address, p.bedrooms || 0, p.bathrooms || 0, JSON.stringify(p)];
+      const vals = [String(Math.round(p.id)), p.name || p.display || "", groupName, address, p.bedrooms || 0, p.bathrooms || 0, JSON.stringify(p)];
       upsert.run(...vals, ...vals.slice(1));
     }
   });
@@ -124,9 +117,12 @@ async function syncTasksForDate(date) {
   }
 
   const allTasks = [];
+  let errorCount = 0;
+  let checkedCount = 0;
   for (const prop of props) {
     try {
-      const rawTasks = await bwFetch(`/task?home_id=${parseInt(prop.id, 10)}`);
+      const rawTasks = await bwFetch(`/task?home_id=${Math.round(prop.id)}`);
+      checkedCount++;
       // Handle paginated response - tasks may be in results wrapper
       const tasks = Array.isArray(rawTasks) ? rawTasks : (rawTasks.results || rawTasks.data || rawTasks.tasks || []);
       if (Array.isArray(tasks)) {
@@ -134,15 +130,29 @@ async function syncTasksForDate(date) {
           const taskDate = t.scheduled_date || t.deadline || "";
           if (taskDate.startsWith(date)) {
             allTasks.push({ ...t, _prop: prop });
+            console.log(`[BW] Found task for ${date}: ${t.name} at ${prop.name} (assigned: ${t.assignments?.[0]?.name || 'unassigned'})`);
           }
         }
       }
     } catch (e) {
-      console.error(`[BW] Error fetching tasks for ${prop.name}:`, e.message);
+      errorCount++;
+      if (errorCount <= 3) console.error(`[BW] Error fetching tasks for ${prop.name} (id:${prop.id}):`, e.message);
+    }
+  }
+  console.log(`[BW] Task sync: checked ${checkedCount} props, ${errorCount} errors, found ${allTasks.length} tasks for ${date}`);
+
+  // Remove stale jobs that no longer exist in Breezeway for this date
+  const bwTaskIds = allTasks.map(t => t.id);
+  const existingJobs = db.prepare("SELECT id, bw_task_id FROM jobs WHERE date = ?").all(date);
+  for (const ej of existingJobs) {
+    if (ej.bw_task_id && !bwTaskIds.includes(ej.bw_task_id)) {
+      db.prepare("DELETE FROM job_steps WHERE job_id = ?").run(ej.id);
+      db.prepare("DELETE FROM jobs WHERE id = ?").run(ej.id);
+      console.log(`[BW] Removed stale job ${ej.id} (task ${ej.bw_task_id}) for ${date}`);
     }
   }
 
-  // Remove stale jobs that no longer exist in Breezeway
+  // Upsert jobs
   const upsert = db.prepare(`
     INSERT INTO jobs (id, date, bw_task_id, property_id, property_name, group_name, cleaner_name,
       checkout_time, expected_arrival, rate, task_notes, bw_status, bw_started_at, bw_completed_at, is_checkout_day, updated_at)
@@ -157,7 +167,8 @@ async function syncTasksForDate(date) {
       const id = existing ? existing.id : "j" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
       const propDb = db.prepare("SELECT * FROM properties WHERE id = ?").get(t._prop.id);
       const cleaner = t.assignments?.[0]?.name || t.assignees?.[0]?.full_name || existing?.cleaner_name || "";
-      const typeStatus = typeof t.type_task_status === 'string' ? JSON.parse(t.type_task_status || '{}') : (t.type_task_status || {}); const status = typeStatus.name || typeStatus.code || t.status?.name || t.status?.code || "";
+      const typeStatus = typeof t.type_task_status === 'string' ? JSON.parse(t.type_task_status || '{}') : (t.type_task_status || {});
+      const status = typeStatus.name || typeStatus.code || t.status?.name || t.status?.code || "";
       const startedAt = t.started_at || existing?.bw_started_at || null;
       const completedAt = t.finished_at || t.completed_at || existing?.bw_completed_at || null;
       const desc = t.description || existing?.task_notes || "";
