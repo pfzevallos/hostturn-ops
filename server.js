@@ -617,13 +617,57 @@ app.post("/api/send-closeout-emails-batch", async (req, res) => {
     const results = [];
     for (const job of finishedJobs) {
       try {
-        const r = await fetch(`http://localhost:${process.env.PORT || 3000}/api/send-closeout-email`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ job_id: job.id })
+        // Match owner
+        const owners = db.prepare("SELECT * FROM contacts WHERE role = 'owner'").all();
+        let owner = null;
+        for (const o of owners) {
+          if (!o.properties) continue;
+          const keywords = o.properties.split(",").map(function(k) { return k.trim().toLowerCase(); });
+          const propLower = job.property_name.toLowerCase();
+          if (keywords.some(function(k) { return propLower.includes(k); })) { owner = o; break; }
+        }
+        
+        if (!owner || !owner.email) {
+          results.push({ property: job.property_name, status: "no_owner_email", error: "No owner email matched" });
+          continue;
+        }
+        
+        const propShort = job.property_name.split(" - ")[0];
+        const dateStr = new Date(job.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+        const rate = job.rate || 0;
+        const reportUrl = job.bw_report_url || null;
+        
+        const nodemailer = require("nodemailer");
+        const transporter = nodemailer.createTransport({
+          service: "gmail",
+          auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD }
         });
-        const d = await r.json();
-        results.push({ property: job.property_name, status: d.status, owner: d.owner });
+        const ccList = [owner.cc_email, "lizzy@hostturn.com"].filter(Boolean).join(",");
+        
+        let photosSection = reportUrl ? `<p><strong>Completion Photos & Report:</strong><br><a href="${reportUrl}" style="color:#22c55e;font-weight:bold;">View Cleaning Report & Photos in Breezeway</a></p>` : "";
+        let paymentHtml = "";
+        let paymentText = "";
+        if (rate > 0) {
+          paymentHtml = `<p><strong>Cleaning Fee: $${rate.toFixed(2)}</strong></p><hr style="border:none;border-top:1px solid #ddd;margin:20px 0;"><p><strong>Payment Options:</strong></p><p><strong>Zelle:</strong> pedro@hostturn.com<br><strong>Venmo:</strong> @Pedro-Zevallos</p><p>Please remit payment at your earliest opportunity.</p>`;
+          paymentText = `\nCleaning Fee: $${rate.toFixed(2)}\n\nPayment Options:\nZelle: pedro@hostturn.com\nVenmo: @Pedro-Zevallos\n\nPlease remit payment at your earliest opportunity.`;
+        }
+        
+        const htmlBody = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;"><div style="background:#1a1d27;padding:20px;border-radius:8px 8px 0 0;"><h2 style="color:#22c55e;margin:0;">HostTurn — Cleaning Complete ✅</h2></div><div style="background:#f9f9f9;padding:24px;border-radius:0 0 8px 8px;"><p>Hi ${owner.name.split(" ")[0]},</p><p>Great news! <strong>${propShort}</strong> has been cleaned and is guest-ready.</p><p><strong>Date:</strong> ${dateStr}</p>${photosSection}${paymentHtml}<p>Thank you for the opportunity to service your home!</p><p style="color:#888;font-size:12px;margin-top:24px;">HostTurn — Short-Term Rental Cleaning<br><a href="https://hostturn.com" style="color:#22c55e;">hostturn.com</a></p></div></div>`;
+        const textBody = `Hi ${owner.name.split(" ")[0]},\n\nGreat news! ${propShort} has been cleaned and is guest-ready.\n\nDate: ${dateStr}\n${reportUrl ? "\nCompletion Photos & Report:\n" + reportUrl + "\n" : ""}${paymentText}\n\nThank you for the opportunity to service your home!\n\nhostturn.com`;
+        
+        await transporter.sendMail({
+          from: `"HostTurn" <${process.env.GMAIL_USER}>`,
+          to: owner.email,
+          cc: ccList,
+          subject: `HostTurn — Cleaning Complete: ${propShort} — ${dateStr}`,
+          text: textBody,
+          html: htmlBody
+        });
+        
+        db.prepare("UPDATE jobs SET closeout_email_sent_at = datetime('now') WHERE id = ?").run(job.id);
+        db.prepare("INSERT INTO auto_log (event, job_id, detail) VALUES (?, ?, ?)")
+          .run("closeout_email_sent", job.id, `Sent close-out email to ${owner.name} (${owner.email}) for ${job.property_name}`);
+        results.push({ property: job.property_name, status: "sent", owner: owner.name });
       } catch (e) {
         results.push({ property: job.property_name, status: "error", error: e.message });
       }
