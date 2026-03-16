@@ -82,6 +82,7 @@
         <button class="btn" id="sync-btn" onclick="syncTasks()">Sync Breezeway</button>
         <button class="btn blue" id="send-btn" style="display:none" onclick="sendSchedule()">📩 Send Schedule to Cleaners</button>
         <button class="btn" id="owner-btn" style="display:none;background:var(--warn);color:#000" onclick="notifyOwners()">📧 Notify Owners</button>
+        <button class="btn" id="closeout-btn" style="display:none;background:#a855f7;color:#fff" onclick="sendCloseouts()">💰 Send Close-Out Emails</button>
       </div>
     </div>
     <div id="jobs" class="jobs-grid">
@@ -112,6 +113,29 @@
       document.getElementById('display-date').textContent = formatDate(tab === 'today' ? todayDate : tomorrowDate);
       document.getElementById('send-btn').style.display = tab === 'tomorrow' ? 'inline-flex' : 'none';
       document.getElementById('owner-btn').style.display = tab === 'tomorrow' ? 'inline-flex' : 'none';
+      // Show close-out button on Today tab if there are finished jobs without close-out emails
+      var activeJobs = tab === 'today' ? todayJobs : tomorrowJobs;
+      var pendingCloseouts = activeJobs.filter(function(j) {
+        var s = (j.bw_status || '').toLowerCase();
+        return (s === 'finished' || s === 'closed' || s === 'completed') && !j.closeout_email_sent_at;
+      });
+      document.getElementById('closeout-btn').style.display = pendingCloseouts.length > 0 ? 'inline-flex' : 'none';
+      // Show closeout button on Today tab if there are finished jobs without closeout emails
+      var finishedWithout = todayJobs.filter(function(j){
+        var s = (j.bw_status||'').toLowerCase();
+        return (s==='finished'||s==='closed'||s==='completed') && !j.closeout_email_sent_at;
+      });
+      var cbtn = document.getElementById('closeout-btn');
+      if (tab === 'today' && finishedWithout.length) {
+        cbtn.style.display = 'inline-flex';
+        cbtn.textContent = '💰 Send Close-Out Emails (' + finishedWithout.length + ')';
+      } else if (tab === 'today' && todayJobs.some(function(j){return j.closeout_email_sent_at})) {
+        cbtn.style.display = 'inline-flex';
+        cbtn.textContent = '✅ Close-Outs Sent';
+        cbtn.style.background = 'var(--accent)'; cbtn.style.color = '#000';
+      } else {
+        cbtn.style.display = 'none';
+      }
       // Update send button text based on whether schedule was already sent
       if (tab === 'tomorrow' && tomorrowJobs.length) {
         var assignedJobs = tomorrowJobs.filter(function(j){return j.cleaner_name});
@@ -171,6 +195,9 @@
         } else if (j.owner_notified_at) {
           ownerStatus = '<span style="font-size:11px;color:var(--warn);margin-left:4px">📧 Owner Notified</span>';
         }
+        if (j.closeout_email_sent_at) {
+          ownerStatus += '<span style="font-size:11px;color:var(--accent);margin-left:4px">💰 Invoice Sent</span>';
+        }
         return '<div class="job-card"><div><div class="prop">' + j.property_name + '</div><div class="group">' + (j.group_name || '') + ownerStatus + '</div></div><div class="cleaner"><div class="avatar">' + init + '</div><div><div class="name">' + (j.cleaner_name || 'Unassigned') + '</div>' + smsStatus + '</div></div><div><span class="badge ' + sc + '">' + st + '</span></div><div class="time">' + (j.expected_arrival || '') + '</div></div>';
       }).join('');
     }
@@ -193,6 +220,8 @@
         document.getElementById('count-tomorrow').textContent = tomorrowJobs.length;
         try { var p = await (await fetch('/api/debug/bw-properties')).json(); document.getElementById('s-props').textContent = p.count || '--'; } catch(e){}
         renderJobs();
+        // Refresh button states
+        switchTab(currentTab);
       } catch(e) {
         document.getElementById('jobs').innerHTML = '<div class="empty"><p>Error: ' + e.message + '</p></div>';
       }
@@ -256,6 +285,56 @@
       } catch(e) {
         btn.textContent = 'Error!';
         setTimeout(function(){ btn.textContent = '📧 Notify Owners'; btn.disabled = false; }, 3000);
+      }
+    }
+
+    async function sendCloseouts() {
+      var date = currentTab === 'today' ? todayDate : tomorrowDate;
+      var jobs = currentTab === 'today' ? todayJobs : tomorrowJobs;
+      var finishedJobs = jobs.filter(function(j) {
+        var s = (j.bw_status || '').toLowerCase();
+        return (s === 'finished' || s === 'closed' || s === 'completed') && !j.closeout_email_sent_at;
+      });
+      if (!finishedJobs.length) { alert('No finished jobs pending close-out emails.'); return; }
+      var msg = 'Send close-out emails (invoice + photos) for ' + finishedJobs.length + ' finished job(s)?\n\n';
+      finishedJobs.forEach(function(j) { msg += '• ' + j.property_name + '\n'; });
+      if (!confirm(msg)) return;
+      var btn = document.getElementById('closeout-btn');
+      btn.disabled = true; btn.textContent = 'Sending...';
+      try {
+        var r = await fetch('/api/send-closeout-emails-batch', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:date})});
+        var data = await r.json();
+        if (data.error) { btn.textContent = 'Error: ' + data.error; }
+        else { btn.textContent = 'Sent ' + data.sent + ' close-out emails!'; }
+        setTimeout(function(){ btn.textContent = '💰 Send Close-Out Emails'; btn.disabled = false; }, 5000);
+        loadAllJobs();
+      } catch(e) {
+        btn.textContent = 'Error!';
+        setTimeout(function(){ btn.textContent = '💰 Send Close-Out Emails'; btn.disabled = false; }, 3000);
+      }
+    }
+
+    async function sendCloseouts() {
+      var finishedJobs = todayJobs.filter(function(j){
+        var s = (j.bw_status||'').toLowerCase();
+        return (s==='finished'||s==='closed'||s==='completed') && !j.closeout_email_sent_at;
+      });
+      if (!finishedJobs.length) { alert('No finished jobs pending close-out emails.'); return; }
+      var msg = 'Send close-out emails (with photos & invoice) for ' + finishedJobs.length + ' finished job(s)?\n\n';
+      finishedJobs.forEach(function(j) { msg += '• ' + j.property_name + ' (' + j.cleaner_name + ')\n'; });
+      if (!confirm(msg)) return;
+      var btn = document.getElementById('closeout-btn');
+      btn.disabled = true; btn.textContent = 'Sending...';
+      try {
+        var r = await fetch('/api/send-closeout-emails-batch', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:todayDate})});
+        var data = await r.json();
+        if (data.error) { btn.textContent = 'Error: ' + data.error; }
+        else { btn.textContent = '✅ Sent ' + data.sent + ' close-out emails!'; btn.style.background = 'var(--accent)'; btn.style.color = '#000'; }
+        setTimeout(function(){ btn.disabled = false; }, 5000);
+        loadAllJobs();
+      } catch(e) {
+        btn.textContent = 'Error!';
+        setTimeout(function(){ btn.textContent = '💰 Send Close-Out Emails'; btn.disabled = false; }, 3000);
       }
     }
 
