@@ -187,9 +187,12 @@ async function syncTasksForDate(date) {
         status, startedAt, completedAt, desc, cleaner
       );
       
-      // Save report_url separately (not in upsert to keep it simple)
+      // Save report_url and task name separately (not in upsert to keep it simple)
       if (reportUrl) {
         db.prepare("UPDATE jobs SET bw_report_url = ? WHERE id = ?").run(reportUrl, id);
+      }
+      if (t.name) {
+        db.prepare("UPDATE jobs SET bw_task_name = ? WHERE id = ?").run(t.name, id);
       }
 
       // Ensure job_steps exist
