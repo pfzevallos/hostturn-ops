@@ -424,6 +424,135 @@ app.post("/api/send-owner-notifications", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// --- Send close-out / completion email to owner ---
+app.post("/api/send-closeout-email", async (req, res) => {
+  try {
+    const db = getDb();
+    const jobId = req.body.job_id;
+    if (!jobId) return res.status(400).json({ error: "job_id required" });
+    
+    const job = db.prepare("SELECT * FROM jobs WHERE id = ?").get(jobId);
+    if (!job) return res.status(404).json({ error: "Job not found" });
+    
+    // Match owner
+    const owners = db.prepare("SELECT * FROM contacts WHERE role = 'owner'").all();
+    let owner = null;
+    for (const o of owners) {
+      if (!o.properties) continue;
+      const keywords = o.properties.split(",").map(function(k) { return k.trim().toLowerCase(); });
+      const propLower = job.property_name.toLowerCase();
+      if (keywords.some(function(k) { return propLower.includes(k); })) {
+        owner = o;
+        break;
+      }
+    }
+    
+    if (!owner || !owner.email) {
+      return res.json({ status: "no_owner_email", error: "No owner email matched for " + job.property_name });
+    }
+    
+    const propShort = job.property_name.split(" - ")[0];
+    const dateStr = new Date(job.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+    const rate = job.rate || 0;
+    const reportUrl = job.bw_report_url || null;
+    
+    const nodemailer = require("nodemailer");
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD }
+    });
+    
+    const ccList = [owner.cc_email, "lizzy@hostturn.com"].filter(Boolean).join(",");
+    
+    let photosSection = "";
+    if (reportUrl) {
+      photosSection = `<p><strong>Completion Photos & Report:</strong><br><a href="${reportUrl}" style="color:#22c55e;font-weight:bold;">View Cleaning Report & Photos in Breezeway</a></p>`;
+    }
+    
+    let paymentSection = "";
+    if (rate > 0) {
+      paymentSection = `<p><strong>Cleaning Fee: $${rate.toFixed(2)}</strong></p>`;
+    }
+    
+    const htmlBody = `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+        <div style="background:#1a1d27;padding:20px;border-radius:8px 8px 0 0;">
+          <h2 style="color:#22c55e;margin:0;">HostTurn — Cleaning Complete ✅</h2>
+        </div>
+        <div style="background:#f9f9f9;padding:24px;border-radius:0 0 8px 8px;">
+          <p>Hi ${owner.name.split(" ")[0]},</p>
+          <p>Great news! <strong>${propShort}</strong> has been cleaned and is guest-ready.</p>
+          <p><strong>Date:</strong> ${dateStr}<br>
+          <strong>Cleaner:</strong> ${job.cleaner_name || "HostTurn Team"}</p>
+          ${photosSection}
+          ${paymentSection}
+          <hr style="border:none;border-top:1px solid #ddd;margin:20px 0;">
+          <p><strong>Payment Options:</strong></p>
+          <p>
+            <strong>Zelle:</strong> pedro@hostturn.com<br>
+            <strong>Venmo:</strong> @Pedro-Zevallos
+          </p>
+          <p>Please remit payment at your earliest convenience. Thank you for choosing HostTurn!</p>
+          <p style="color:#888;font-size:12px;margin-top:24px;">
+            HostTurn — Short-Term Rental Cleaning<br>
+            <a href="https://hostturn.com" style="color:#22c55e;">hostturn.com</a>
+          </p>
+        </div>
+      </div>`;
+    
+    const textBody = `Hi ${owner.name.split(" ")[0]},\n\nGreat news! ${propShort} has been cleaned and is guest-ready.\n\nDate: ${dateStr}\nCleaner: ${job.cleaner_name || "HostTurn Team"}\n${reportUrl ? "\nCompletion Photos & Report:\n" + reportUrl + "\n" : ""}${rate > 0 ? "\nCleaning Fee: $" + rate.toFixed(2) + "\n" : ""}\nPayment Options:\nZelle: pedro@hostturn.com\nVenmo: @Pedro-Zevallos\n\nPlease remit payment at your earliest convenience. Thank you for choosing HostTurn!\n\nhostturn.com`;
+    
+    await transporter.sendMail({
+      from: `"HostTurn" <${process.env.GMAIL_USER}>`,
+      to: owner.email,
+      cc: ccList,
+      subject: `HostTurn — Cleaning Complete: ${propShort} — ${dateStr}`,
+      text: textBody,
+      html: htmlBody
+    });
+    
+    db.prepare("UPDATE jobs SET closeout_email_sent_at = datetime('now') WHERE id = ?").run(job.id);
+    db.prepare("INSERT INTO auto_log (event, job_id, detail) VALUES (?, ?, ?)")
+      .run("closeout_email_sent", job.id, `Sent close-out email to ${owner.name} (${owner.email}) for ${job.property_name}`);
+    
+    res.json({ status: "sent", owner: owner.name, email: owner.email, property: job.property_name, hasReport: !!reportUrl });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Batch send all pending close-out emails for finished jobs
+app.post("/api/send-closeout-emails-batch", async (req, res) => {
+  try {
+    const db = getDb();
+    const date = req.body.date;
+    if (!date) return res.status(400).json({ error: "date required" });
+    
+    const jobs = db.prepare("SELECT * FROM jobs WHERE date = ? AND closeout_email_sent_at IS NULL ORDER BY property_name").all(date);
+    const finishedJobs = jobs.filter(function(j) {
+      var s = (j.bw_status || "").toLowerCase();
+      return s === "finished" || s === "closed" || s === "completed";
+    });
+    
+    if (!finishedJobs.length) return res.json({ sent: 0, total: 0, message: "No finished jobs without close-out emails" });
+    
+    const results = [];
+    for (const job of finishedJobs) {
+      try {
+        const r = await fetch(`http://localhost:${process.env.PORT || 3000}/api/send-closeout-email`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ job_id: job.id })
+        });
+        const d = await r.json();
+        results.push({ property: job.property_name, status: d.status, owner: d.owner });
+      } catch (e) {
+        results.push({ property: job.property_name, status: "error", error: e.message });
+      }
+    }
+    
+    res.json({ sent: results.filter(function(r) { return r.status === "sent"; }).length, total: results.length, results });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // --- Automation log ---
 app.get("/api/auto-log", (req, res) => {
   const limit = parseInt(req.query.limit) || 50;
