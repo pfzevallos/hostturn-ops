@@ -172,6 +172,7 @@ async function syncTasksForDate(date) {
       const startedAt = t.started_at || existing?.bw_started_at || null;
       const completedAt = t.finished_at || t.completed_at || existing?.bw_completed_at || null;
       const desc = t.description || existing?.task_notes || "";
+      const reportUrl = t.report_url || existing?.bw_report_url || null;
 
       // Determine expected arrival: 10am for checkout day, 9am for vacant
       const isCheckout = 1; // Default to checkout; can be refined with reservation data
@@ -185,6 +186,11 @@ async function syncTasksForDate(date) {
         // ON CONFLICT updates:
         status, startedAt, completedAt, desc, cleaner
       );
+      
+      // Save report_url separately (not in upsert to keep it simple)
+      if (reportUrl) {
+        db.prepare("UPDATE jobs SET bw_report_url = ? WHERE id = ?").run(reportUrl, id);
+      }
 
       // Ensure job_steps exist
       const STEPS = ["owner_confirm","cleaner_sched","morning","arrival","progress","end_verify","finishing","close_out"];
