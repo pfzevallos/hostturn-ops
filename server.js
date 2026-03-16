@@ -522,9 +522,19 @@ app.post("/api/send-closeout-email", async (req, res) => {
       photosSection = `<p><strong>Completion Photos & Report:</strong><br><a href="${reportUrl}" style="color:#22c55e;font-weight:bold;">View Cleaning Report & Photos in Breezeway</a></p>`;
     }
     
-    let paymentSection = "";
+    let paymentHtml = "";
+    let paymentText = "";
     if (rate > 0) {
-      paymentSection = `<p><strong>Cleaning Fee: $${rate.toFixed(2)}</strong></p>`;
+      paymentHtml = `
+          <p><strong>Cleaning Fee: $${rate.toFixed(2)}</strong></p>
+          <hr style="border:none;border-top:1px solid #ddd;margin:20px 0;">
+          <p><strong>Payment Options:</strong></p>
+          <p>
+            <strong>Zelle:</strong> pedro@hostturn.com<br>
+            <strong>Venmo:</strong> @Pedro-Zevallos
+          </p>
+          <p>Please remit payment at your earliest convenience.</p>`;
+      paymentText = `\nCleaning Fee: $${rate.toFixed(2)}\n\nPayment Options:\nZelle: pedro@hostturn.com\nVenmo: @Pedro-Zevallos\n\nPlease remit payment at your earliest convenience.`;
     }
     
     const htmlBody = `
@@ -538,14 +548,8 @@ app.post("/api/send-closeout-email", async (req, res) => {
           <p><strong>Date:</strong> ${dateStr}<br>
           <strong>Cleaner:</strong> ${job.cleaner_name || "HostTurn Team"}</p>
           ${photosSection}
-          ${paymentSection}
-          <hr style="border:none;border-top:1px solid #ddd;margin:20px 0;">
-          <p><strong>Payment Options:</strong></p>
-          <p>
-            <strong>Zelle:</strong> pedro@hostturn.com<br>
-            <strong>Venmo:</strong> @Pedro-Zevallos
-          </p>
-          <p>Please remit payment at your earliest convenience. Thank you for choosing HostTurn!</p>
+          ${paymentHtml}
+          <p>Thank you for choosing HostTurn!</p>
           <p style="color:#888;font-size:12px;margin-top:24px;">
             HostTurn — Short-Term Rental Cleaning<br>
             <a href="https://hostturn.com" style="color:#22c55e;">hostturn.com</a>
@@ -553,7 +557,7 @@ app.post("/api/send-closeout-email", async (req, res) => {
         </div>
       </div>`;
     
-    const textBody = `Hi ${owner.name.split(" ")[0]},\n\nGreat news! ${propShort} has been cleaned and is guest-ready.\n\nDate: ${dateStr}\nCleaner: ${job.cleaner_name || "HostTurn Team"}\n${reportUrl ? "\nCompletion Photos & Report:\n" + reportUrl + "\n" : ""}${rate > 0 ? "\nCleaning Fee: $" + rate.toFixed(2) + "\n" : ""}\nPayment Options:\nZelle: pedro@hostturn.com\nVenmo: @Pedro-Zevallos\n\nPlease remit payment at your earliest convenience. Thank you for choosing HostTurn!\n\nhostturn.com`;
+    const textBody = `Hi ${owner.name.split(" ")[0]},\n\nGreat news! ${propShort} has been cleaned and is guest-ready.\n\nDate: ${dateStr}\nCleaner: ${job.cleaner_name || "HostTurn Team"}\n${reportUrl ? "\nCompletion Photos & Report:\n" + reportUrl + "\n" : ""}${paymentText}\n\nThank you for choosing HostTurn!\n\nhostturn.com`;
     
     await transporter.sendMail({
       from: `"HostTurn" <${process.env.GMAIL_USER}>`,
