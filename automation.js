@@ -51,17 +51,48 @@ async function checkArrivals() {
       continue;
     }
 
-    // === CASE 2: Expected arrival time has passed, no START pressed ===
-    if (job.expected_arrival && currentTime >= job.expected_arrival && !job.bw_started_at) {
-      // Check if we already sent the late text
+    // === CASE 2: 10:30 AM check — first job not started ===
+    // Only check the cleaner's FIRST job of the day
+    const cleanerAllJobs = jobs.filter(j => j.cleaner_name === job.cleaner_name);
+    const isFirstJob = cleanerAllJobs[0]?.id === job.id;
+    
+    if (isFirstJob && currentTime >= "10:30" && !job.bw_started_at) {
+      // Check if we already sent the late text for this job
       const lateMsg = db.prepare("SELECT * FROM messages WHERE job_id = ? AND step_key = 'arrival_late'").get(job.id);
       if (lateMsg) continue; // Already sent
 
-      console.log(`[AUTO] Late check: ${job.cleaner_name} expected at ${job.property_name} by ${job.expected_arrival}, now ${currentTime}`);
-      await sendStepMessage("arrival_late", job);
-
-      db.prepare("INSERT INTO auto_log (event, job_id, detail) VALUES (?, ?, ?)")
-        .run("arrival_late_sent", job.id, `Sent late-arrival check to ${job.cleaner_name} (expected ${job.expected_arrival})`);
+      console.log(`[AUTO] 10:30 check: ${job.cleaner_name} has not started first job ${job.property_name}`);
+      
+      // Build a custom message based on language
+      const contact = db.prepare("SELECT * FROM contacts WHERE name = ?").get(job.cleaner_name);
+      const isSpanish = contact?.lang === "es";
+      
+      let msg;
+      if (cleanerAllJobs.length === 1) {
+        // Single job today
+        if (isSpanish) {
+          msg = `HostTurn: Hola ${job.cleaner_name}, vemos que aún no has iniciado el trabajo en ${job.property_name}. Si ya estás ahí, por favor presiona INICIAR en Breezeway. Si no, avísanos a qué hora planeas llegar. ¡Gracias!`;
+        } else {
+          msg = `HostTurn: Hi ${job.cleaner_name}, we see you haven't started ${job.property_name} yet. If you're already there, please hit START in Breezeway. If not, let us know when you plan to arrive. Thanks!`;
+        }
+      } else {
+        // Multiple jobs — ask which unit they're heading to first
+        const jobList = cleanerAllJobs.map(function(j, i) { return (i+1) + ". " + j.property_name; }).join("\n");
+        if (isSpanish) {
+          msg = `HostTurn: Hola ${job.cleaner_name}, vemos que aún no has iniciado ningún trabajo hoy. Si ya estás en una propiedad, por favor presiona INICIAR en Breezeway. Si no, avísanos a qué hora planeas llegar y a cuál unidad primero.\n\nTus trabajos de hoy:\n${jobList}`;
+        } else {
+          msg = `HostTurn: Hi ${job.cleaner_name}, we see you haven't started any jobs yet today. If you're already at a unit, please hit START in Breezeway. If not, let us know when you plan to arrive and which unit first.\n\nYour jobs today:\n${jobList}`;
+        }
+      }
+      
+      const sms = require("./sms");
+      try {
+        await sms.sendSMS(contact?.phone || "", msg, job.id, "arrival_late", isSpanish ? "es" : "en");
+        db.prepare("INSERT INTO auto_log (event, job_id, detail) VALUES (?, ?, ?)")
+          .run("arrival_late_sent", job.id, `Sent 10:30 arrival check to ${job.cleaner_name}`);
+      } catch(e) {
+        console.error(`[AUTO] Failed to send arrival check to ${job.cleaner_name}:`, e.message);
+      }
     }
 
     // === CASE 3: Multi-job chaining ===
