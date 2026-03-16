@@ -237,6 +237,30 @@ app.get("/api/debug/bw-properties", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Update property rates by matching property name keywords
+app.post("/api/properties/set-rates", (req, res) => {
+  const db = getDb();
+  const rates = req.body.rates; // { "keyword": rate, ... }
+  if (!rates) return res.status(400).json({ error: "rates object required" });
+  
+  const props = db.prepare("SELECT * FROM properties").all();
+  let updated = 0;
+  
+  for (const [keyword, rate] of Object.entries(rates)) {
+    const kw = keyword.toLowerCase();
+    for (const p of props) {
+      if (p.name && p.name.toLowerCase().includes(kw)) {
+        db.prepare("UPDATE properties SET rate = ? WHERE id = ?").run(rate, p.id);
+        // Also update any existing jobs for this property
+        db.prepare("UPDATE jobs SET rate = ? WHERE property_id = ? AND rate = 0").run(rate, p.id);
+        updated++;
+      }
+    }
+  }
+  
+  res.json({ updated, total_properties: props.length });
+});
+
 app.post("/api/sync/tasks", async (req, res) => {
   try {
     const date = req.body.date || new Date().toISOString().split("T")[0];
@@ -533,8 +557,8 @@ app.post("/api/send-closeout-email", async (req, res) => {
             <strong>Zelle:</strong> pedro@hostturn.com<br>
             <strong>Venmo:</strong> @Pedro-Zevallos
           </p>
-          <p>Please remit payment at your earliest convenience.</p>`;
-      paymentText = `\nCleaning Fee: $${rate.toFixed(2)}\n\nPayment Options:\nZelle: pedro@hostturn.com\nVenmo: @Pedro-Zevallos\n\nPlease remit payment at your earliest convenience.`;
+          <p>Please remit payment at your earliest opportunity.</p>`;
+      paymentText = `\nCleaning Fee: $${rate.toFixed(2)}\n\nPayment Options:\nZelle: pedro@hostturn.com\nVenmo: @Pedro-Zevallos\n\nPlease remit payment at your earliest opportunity.`;
     }
     
     const htmlBody = `
@@ -545,11 +569,10 @@ app.post("/api/send-closeout-email", async (req, res) => {
         <div style="background:#f9f9f9;padding:24px;border-radius:0 0 8px 8px;">
           <p>Hi ${owner.name.split(" ")[0]},</p>
           <p>Great news! <strong>${propShort}</strong> has been cleaned and is guest-ready.</p>
-          <p><strong>Date:</strong> ${dateStr}<br>
-          <strong>Cleaner:</strong> ${job.cleaner_name || "HostTurn Team"}</p>
+          <p><strong>Date:</strong> ${dateStr}</p>
           ${photosSection}
           ${paymentHtml}
-          <p>Thank you for choosing HostTurn!</p>
+          <p>Thank you for the opportunity to service your home!</p>
           <p style="color:#888;font-size:12px;margin-top:24px;">
             HostTurn — Short-Term Rental Cleaning<br>
             <a href="https://hostturn.com" style="color:#22c55e;">hostturn.com</a>
@@ -557,7 +580,7 @@ app.post("/api/send-closeout-email", async (req, res) => {
         </div>
       </div>`;
     
-    const textBody = `Hi ${owner.name.split(" ")[0]},\n\nGreat news! ${propShort} has been cleaned and is guest-ready.\n\nDate: ${dateStr}\nCleaner: ${job.cleaner_name || "HostTurn Team"}\n${reportUrl ? "\nCompletion Photos & Report:\n" + reportUrl + "\n" : ""}${paymentText}\n\nThank you for choosing HostTurn!\n\nhostturn.com`;
+    const textBody = `Hi ${owner.name.split(" ")[0]},\n\nGreat news! ${propShort} has been cleaned and is guest-ready.\n\nDate: ${dateStr}\n${reportUrl ? "\nCompletion Photos & Report:\n" + reportUrl + "\n" : ""}${paymentText}\n\nThank you for the opportunity to service your home!\n\nhostturn.com`;
     
     await transporter.sendMail({
       from: `"HostTurn" <${process.env.GMAIL_USER}>`,
