@@ -52,11 +52,11 @@ async function checkArrivals() {
     }
 
     // === CASE 2: 10:30 AM check — first job not started ===
-    // Only check the cleaner's FIRST job of the day
+    // Only check the cleaner's FIRST job of the day, only between 10:30-11:30 AM
     const cleanerAllJobs = jobs.filter(j => j.cleaner_name === job.cleaner_name);
     const isFirstJob = cleanerAllJobs[0]?.id === job.id;
     
-    if (isFirstJob && currentTime >= "10:30" && !job.bw_started_at) {
+    if (isFirstJob && currentTime >= "10:30" && currentTime <= "11:30" && !job.bw_started_at) {
       // Check if we already sent the late text for this job
       const lateMsg = db.prepare("SELECT * FROM messages WHERE job_id = ? AND step_key = 'arrival_late'").get(job.id);
       if (lateMsg) continue; // Already sent
@@ -64,7 +64,16 @@ async function checkArrivals() {
       console.log(`[AUTO] 10:30 check: ${job.cleaner_name} has not started first job ${job.property_name}`);
       
       // Build a custom message based on language
-      const contact = db.prepare("SELECT * FROM contacts WHERE name = ?").get(job.cleaner_name);
+      // Fuzzy match contact name (trim extra spaces, try partial match)
+      const cleanerNameTrimmed = job.cleaner_name.replace(/\s+/g, ' ').trim();
+      let contact = db.prepare("SELECT * FROM contacts WHERE name = ?").get(cleanerNameTrimmed);
+      if (!contact) contact = db.prepare("SELECT * FROM contacts WHERE name LIKE ?").get('%' + cleanerNameTrimmed.split(' ')[0] + '%');
+      
+      if (!contact || !contact.phone) {
+        console.error(`[AUTO] No phone found for cleaner ${job.cleaner_name}`);
+        continue;
+      }
+      
       const isSpanish = contact?.lang === "es";
       
       let msg;
