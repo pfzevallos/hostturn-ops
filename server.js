@@ -374,6 +374,60 @@ app.post("/api/send-owner-notifications", async (req, res) => {
       const dateStr = new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
       const propShort = job.property_name.split(" - ")[0];
       
+      // Determine if the unit is already vacant by checking task notes and Breezeway task name
+      // Look for checkout dates in task_notes like "checkout March 15" or in the task name like "Out 3/15"
+      const notes = (job.task_notes || "").toLowerCase();
+      const taskName = (job.bw_task_name || "").toLowerCase();
+      const combined = notes + " " + taskName;
+      
+      // Try to detect if checkout was before the cleaning date
+      let isVacant = false;
+      // Match patterns like "out 3/15", "checkout march 15", "check out 3/15", "out 10am 3/15"
+      const datePatterns = combined.match(/(?:out|checkout|check out)[^0-9]*(\d{1,2})\/(\d{1,2})/i);
+      if (datePatterns) {
+        const checkoutMonth = parseInt(datePatterns[1]);
+        const checkoutDay = parseInt(datePatterns[2]);
+        const cleanMonth = parseInt(date.split("-")[1]);
+        const cleanDay = parseInt(date.split("-")[2]);
+        // If checkout date is before cleaning date, the unit is vacant
+        if (checkoutMonth < cleanMonth || (checkoutMonth === cleanMonth && checkoutDay < cleanDay)) {
+          isVacant = true;
+        }
+      }
+      // Also check task_notes for "checkout March 15" style dates
+      const monthNames = {"jan":1,"january":1,"feb":2,"february":2,"mar":3,"march":3,"apr":4,"april":4,"may":5,"jun":6,"june":6,"jul":7,"july":7,"aug":8,"august":8,"sep":9,"september":9,"oct":10,"october":10,"nov":11,"november":11,"dec":12,"december":12};
+      const monthPattern = combined.match(/checkout\s+(\w+)\s+(\d{1,2})/i);
+      if (monthPattern && monthNames[monthPattern[1].toLowerCase()]) {
+        const coMonth = monthNames[monthPattern[1].toLowerCase()];
+        const coDay = parseInt(monthPattern[2]);
+        const cleanMonth = parseInt(date.split("-")[1]);
+        const cleanDay = parseInt(date.split("-")[2]);
+        if (coMonth < cleanMonth || (coMonth === cleanMonth && coDay < cleanDay)) {
+          isVacant = true;
+        }
+      }
+      // If task name contains "STANDARD CLEAN" or "DEEP CLEAN" without a date, assume it could be vacant
+      if (/standard clean|deep clean|general clean/i.test(combined) && !datePatterns && !monthPattern) {
+        isVacant = true; // No checkout date found, likely a maintenance/vacant clean
+      }
+      
+      let emailSubject, emailText, emailHtml, smsMsg;
+      const firstName = owner.name.split(" ")[0];
+      
+      if (isVacant) {
+        // Vacant unit — simple notification, no ask for special instructions
+        emailSubject = `HostTurn Cleaning Scheduled - ${propShort} - ${dateStr}`;
+        emailText = `Hi ${firstName},\n\nJust a heads up — we have ${propShort} scheduled for cleaning on ${dateStr}.\n\nThank you!\nHostTurn Team\nhostturn.com`;
+        emailHtml = `<p>Hi ${firstName},</p><p>Just a heads up — we have <strong>${propShort}</strong> scheduled for cleaning on <strong>${dateStr}</strong>.</p><p>Thank you!<br>HostTurn Team<br><a href="https://hostturn.com">hostturn.com</a></p>`;
+        smsMsg = `HostTurn: Hi ${firstName}, just a heads up — we have ${propShort} scheduled for cleaning on ${dateStr}. Thank you!`;
+      } else {
+        // Same-day checkout — ask to confirm checkout time
+        emailSubject = `HostTurn Cleaning Scheduled - ${propShort} - ${dateStr}`;
+        emailText = `Hi ${firstName},\n\nWe have ${propShort} scheduled for cleaning on ${dateStr}.\n\nCan you please confirm the checkout time? If checkout is at ${checkoutTime}, no action needed.\n\nIf the checkout time is different, please reply to this email with the correct time.\n\nThank you!\nHostTurn Team\nhostturn.com`;
+        emailHtml = `<p>Hi ${firstName},</p><p>We have <strong>${propShort}</strong> scheduled for cleaning on <strong>${dateStr}</strong>.</p><p>Can you please confirm the checkout time? If checkout is at <strong>${checkoutTime}</strong>, no action needed.</p><p>If the checkout time is different, please reply to this email with the correct time.</p><p>Thank you!<br>HostTurn Team<br><a href="https://hostturn.com">hostturn.com</a></p>`;
+        smsMsg = `HostTurn: Hi ${firstName}, we have ${propShort} scheduled for cleaning on ${dateStr}. Can you confirm the checkout time? Reply with the time or YES if checkout is at ${checkoutTime}. Thank you!`;
+      }
+      
       let sentVia = [];
       
       // Send email if owner has email
@@ -389,9 +443,9 @@ app.post("/api/send-owner-notifications", async (req, res) => {
             from: `"HostTurn" <${process.env.GMAIL_USER}>`,
             to: owner.email,
             cc: ccList,
-            subject: `HostTurn Cleaning Scheduled - ${propShort} - ${dateStr}`,
-            text: `Hi ${owner.name.split(" ")[0]},\n\nWe have ${propShort} scheduled for cleaning on ${dateStr}.\n\nCan you please confirm the checkout time? If checkout is at ${checkoutTime}, no action needed.\n\nIf the checkout time is different, please reply to this email with the correct time.\n\nThank you!\nHostTurn Team\nhostturn.com`,
-            html: `<p>Hi ${owner.name.split(" ")[0]},</p><p>We have <strong>${propShort}</strong> scheduled for cleaning on <strong>${dateStr}</strong>.</p><p>Can you please confirm the checkout time? If checkout is at <strong>${checkoutTime}</strong>, no action needed.</p><p>If the checkout time is different, please reply to this email with the correct time.</p><p>Thank you!<br>HostTurn Team<br><a href="https://hostturn.com">hostturn.com</a></p>`
+            subject: emailSubject,
+            text: emailText,
+            html: emailHtml
           });
           sentVia.push("email");
         } catch (e) {
@@ -402,8 +456,7 @@ app.post("/api/send-owner-notifications", async (req, res) => {
       // Send SMS if owner has phone
       if (owner.phone) {
         try {
-          const ownerMsg = `HostTurn: Hi ${owner.name.split(" ")[0]}, we have ${propShort} scheduled for cleaning on ${dateStr}. Can you confirm the checkout time? Reply with the time or YES if checkout is at ${checkoutTime}. Thank you!`;
-          await sms.sendSMS(owner.phone, ownerMsg, job.id, "owner_confirm", "en");
+          await sms.sendSMS(owner.phone, smsMsg, job.id, "owner_confirm", "en");
           sentVia.push("sms");
         } catch (e) {
           console.error(`[OWNER] SMS failed for ${owner.name}:`, e.message);
