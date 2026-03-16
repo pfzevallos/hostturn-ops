@@ -334,11 +334,93 @@ app.post("/api/send-schedule", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.post("/api/breezeway/subscribe-webhook", async (req, res) => {
+// --- Send owner notifications for tomorrow's jobs ---
+app.post("/api/send-owner-notifications", async (req, res) => {
   try {
-    const url = `${process.env.BASE_URL}/webhook/breezeway`;
-    const result = await bw.subscribeWebhook(url);
-    res.json(result);
+    const db = getDb();
+    const date = req.body.date;
+    if (!date) return res.status(400).json({ error: "date required" });
+    
+    const jobs = db.prepare("SELECT * FROM jobs WHERE date = ? ORDER BY property_name").all(date);
+    if (!jobs.length) return res.json({ sent: 0, error: "No jobs for " + date });
+    
+    const owners = db.prepare("SELECT * FROM contacts WHERE role = 'owner'").all();
+    const results = [];
+    
+    for (const job of jobs) {
+      if (job.owner_notified_at) {
+        results.push({ property: job.property_name, status: "already_sent" });
+        continue;
+      }
+      
+      // Match owner to property using the properties field
+      let owner = null;
+      for (const o of owners) {
+        if (!o.properties) continue;
+        const keywords = o.properties.split(",").map(function(k) { return k.trim().toLowerCase(); });
+        const propLower = job.property_name.toLowerCase();
+        if (keywords.some(function(k) { return propLower.includes(k); })) {
+          owner = o;
+          break;
+        }
+      }
+      
+      if (!owner) {
+        results.push({ property: job.property_name, status: "no_owner", error: "No owner matched" });
+        continue;
+      }
+      
+      const checkoutTime = job.checkout_time || "10:00 AM";
+      const dateStr = new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
+      const propShort = job.property_name.split(" - ")[0];
+      
+      let sentVia = [];
+      
+      // Send email if owner has email
+      if (owner.email) {
+        try {
+          const nodemailer = require("nodemailer");
+          const transporter = nodemailer.createTransport({
+            service: "gmail",
+            auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD }
+          });
+          const ccList = owner.cc_email || undefined;
+          await transporter.sendMail({
+            from: `"HostTurn" <${process.env.GMAIL_USER}>`,
+            to: owner.email,
+            cc: ccList,
+            subject: `HostTurn Cleaning Scheduled - ${propShort} - ${dateStr}`,
+            text: `Hi ${owner.name.split(" ")[0]},\n\nWe have ${propShort} scheduled for cleaning on ${dateStr}.\n\nCan you please confirm the checkout time? If checkout is at ${checkoutTime}, no action needed.\n\nIf the checkout time is different, please reply to this email with the correct time.\n\nThank you!\nHostTurn Team\nhostturn.com`,
+            html: `<p>Hi ${owner.name.split(" ")[0]},</p><p>We have <strong>${propShort}</strong> scheduled for cleaning on <strong>${dateStr}</strong>.</p><p>Can you please confirm the checkout time? If checkout is at <strong>${checkoutTime}</strong>, no action needed.</p><p>If the checkout time is different, please reply to this email with the correct time.</p><p>Thank you!<br>HostTurn Team<br><a href="https://hostturn.com">hostturn.com</a></p>`
+          });
+          sentVia.push("email");
+        } catch (e) {
+          console.error(`[OWNER] Email failed for ${owner.name}:`, e.message);
+        }
+      }
+      
+      // Send SMS if owner has phone
+      if (owner.phone) {
+        try {
+          const ownerMsg = `HostTurn: Hi ${owner.name.split(" ")[0]}, we have ${propShort} scheduled for cleaning on ${dateStr}. Can you confirm the checkout time? Reply with the time or YES if checkout is at ${checkoutTime}. Thank you!`;
+          await sms.sendSMS(owner.phone, ownerMsg, job.id, "owner_confirm", "en");
+          sentVia.push("sms");
+        } catch (e) {
+          console.error(`[OWNER] SMS failed for ${owner.name}:`, e.message);
+        }
+      }
+      
+      if (sentVia.length) {
+        db.prepare("UPDATE jobs SET owner_notified_at = datetime('now') WHERE id = ?").run(job.id);
+        db.prepare("INSERT INTO auto_log (event, job_id, detail) VALUES (?, ?, ?)")
+          .run("owner_notified", job.id, `Notified ${owner.name} via ${sentVia.join("+")} about ${job.property_name}`);
+        results.push({ property: job.property_name, owner: owner.name, status: "sent", via: sentVia });
+      } else {
+        results.push({ property: job.property_name, owner: owner.name, status: "no_contact", error: "No email or phone" });
+      }
+    }
+    
+    res.json({ sent: results.filter(function(r) { return r.status === "sent"; }).length, total: results.length, results });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
