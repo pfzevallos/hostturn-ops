@@ -384,7 +384,7 @@ app.post("/api/send-owner-notifications", async (req, res) => {
             service: "gmail",
             auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD }
           });
-          const ccList = owner.cc_email || undefined;
+          const ccList = [owner.cc_email, "lizzy@hostturn.com"].filter(Boolean).join(",");
           await transporter.sendMail({
             from: `"HostTurn" <${process.env.GMAIL_USER}>`,
             to: owner.email,
