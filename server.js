@@ -17,6 +17,29 @@ app.use(express.urlencoded({ extended: true }));
 // Serve dashboard
 app.use(express.static(path.join(__dirname, "public")));
 
+
+// Gmail email helper - uses nodemailer with connection pooling and timeout
+async function sendEmail({ to, cc, subject, text, html }) {
+  const nodemailer = require("nodemailer");
+  const transporter = nodemailer.createTransport({
+    host: "smtp.gmail.com",
+    port: 465,
+    secure: true,
+    auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000
+  });
+  return transporter.sendMail({
+    from: `"HostTurn" <${process.env.GMAIL_USER}>`,
+    to,
+    cc,
+    subject,
+    text,
+    html
+  });
+}
+
 const PORT = process.env.PORT || 3000;
 
 // ═══════════════════════════════════════════════════════
@@ -457,16 +480,8 @@ app.post("/api/send-owner-notifications", async (req, res) => {
       // Send email if owner has email
       if (owner.email) {
         try {
-          const nodemailer = require("nodemailer");
-          const transporter = nodemailer.createTransport({
-            host: "smtp.gmail.com",
-            port: 587,
-            secure: false,
-            auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD }
-          });
           const ccList = [owner.cc_email, "lizzy@hostturn.com"].filter(Boolean).join(",");
-          await transporter.sendMail({
-            from: `"HostTurn" <${process.env.GMAIL_USER}>`,
+          await sendEmail({
             to: owner.email,
             cc: ccList,
             subject: emailSubject,
@@ -535,14 +550,6 @@ app.post("/api/send-closeout-email", async (req, res) => {
     const rate = job.rate || 0;
     const reportUrl = job.bw_report_url || null;
     
-    const nodemailer = require("nodemailer");
-    const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 587,
-      secure: false,
-      auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD }
-    });
-    
     const ccList = [owner.cc_email, "lizzy@hostturn.com"].filter(Boolean).join(",");
     
     let photosSection = "";
@@ -586,8 +593,7 @@ app.post("/api/send-closeout-email", async (req, res) => {
     
     const textBody = `Hi ${owner.name.split(" ")[0]},\n\nGreat news! ${propShort} has been cleaned and is guest-ready.\n\nDate: ${dateStr}\n${reportUrl ? "\nCompletion Photos & Report:\n" + reportUrl + "\n" : ""}${paymentText}\n\nThank you for the opportunity to service your home!\n\nhostturn.com`;
     
-    await transporter.sendMail({
-      from: `"HostTurn" <${process.env.GMAIL_USER}>`,
+    await sendEmail({
       to: owner.email,
       cc: ccList,
       subject: `HostTurn — Cleaning Complete: ${propShort} — ${dateStr}`,
@@ -642,12 +648,6 @@ app.post("/api/send-closeout-emails-batch", async (req, res) => {
         const reportUrl = job.bw_report_url || null;
         
         const nodemailer = require("nodemailer");
-        const transporter = nodemailer.createTransport({
-          host: "smtp.gmail.com",
-          port: 587,
-          secure: false,
-          auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD }
-        });
         const ccList = [owner.cc_email, "lizzy@hostturn.com"].filter(Boolean).join(",");
         
         let photosSection = reportUrl ? `<p><strong>Completion Photos & Report:</strong><br><a href="${reportUrl}" style="color:#22c55e;font-weight:bold;">View Cleaning Report & Photos in Breezeway</a></p>` : "";
@@ -661,8 +661,7 @@ app.post("/api/send-closeout-emails-batch", async (req, res) => {
         const htmlBody = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;"><div style="background:#1a1d27;padding:20px;border-radius:8px 8px 0 0;"><h2 style="color:#22c55e;margin:0;">HostTurn — Cleaning Complete ✅</h2></div><div style="background:#f9f9f9;padding:24px;border-radius:0 0 8px 8px;"><p>Hi ${owner.name.split(" ")[0]},</p><p>Great news! <strong>${propShort}</strong> has been cleaned and is guest-ready.</p><p><strong>Date:</strong> ${dateStr}</p>${photosSection}${paymentHtml}<p>Thank you for the opportunity to service your home!</p><p style="color:#888;font-size:12px;margin-top:24px;">HostTurn — Short-Term Rental Cleaning<br><a href="https://hostturn.com" style="color:#22c55e;">hostturn.com</a></p></div></div>`;
         const textBody = `Hi ${owner.name.split(" ")[0]},\n\nGreat news! ${propShort} has been cleaned and is guest-ready.\n\nDate: ${dateStr}\n${reportUrl ? "\nCompletion Photos & Report:\n" + reportUrl + "\n" : ""}${paymentText}\n\nThank you for the opportunity to service your home!\n\nhostturn.com`;
         
-        await transporter.sendMail({
-          from: `"HostTurn" <${process.env.GMAIL_USER}>`,
+        await sendEmail({
           to: owner.email,
           cc: ccList,
           subject: `HostTurn — Cleaning Complete: ${propShort} — ${dateStr}`,
