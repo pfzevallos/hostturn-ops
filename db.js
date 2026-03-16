@@ -182,6 +182,9 @@ function initTables() {
   // Add new columns if they don't exist (safe migration)
   try { db.exec("ALTER TABLE jobs ADD COLUMN schedule_sent_at TEXT"); } catch(e) {}
   try { db.exec("ALTER TABLE jobs ADD COLUMN confirmed_at TEXT"); } catch(e) {}
+  try { db.exec("ALTER TABLE jobs ADD COLUMN owner_notified_at TEXT"); } catch(e) {}
+  try { db.exec("ALTER TABLE jobs ADD COLUMN owner_confirmed_at TEXT"); } catch(e) {}
+  try { db.exec("ALTER TABLE contacts ADD COLUMN cc_email TEXT"); } catch(e) {}
 }
 
 module.exports = { getDb };
