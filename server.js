@@ -459,7 +459,9 @@ app.post("/api/send-owner-notifications", async (req, res) => {
         try {
           const nodemailer = require("nodemailer");
           const transporter = nodemailer.createTransport({
-            service: "gmail",
+            host: "smtp.gmail.com",
+            port: 587,
+            secure: false,
             auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD }
           });
           const ccList = [owner.cc_email, "lizzy@hostturn.com"].filter(Boolean).join(",");
@@ -535,7 +537,9 @@ app.post("/api/send-closeout-email", async (req, res) => {
     
     const nodemailer = require("nodemailer");
     const transporter = nodemailer.createTransport({
-      service: "gmail",
+      host: "smtp.gmail.com",
+      port: 587,
+      secure: false,
       auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD }
     });
     
@@ -639,7 +643,9 @@ app.post("/api/send-closeout-emails-batch", async (req, res) => {
         
         const nodemailer = require("nodemailer");
         const transporter = nodemailer.createTransport({
-          service: "gmail",
+          host: "smtp.gmail.com",
+          port: 587,
+          secure: false,
           auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD }
         });
         const ccList = [owner.cc_email, "lizzy@hostturn.com"].filter(Boolean).join(",");
