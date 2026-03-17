@@ -1,17 +1,22 @@
 const Database = require("better-sqlite3");
 const path = require("path");
 
-const DB_PATH = path.join(__dirname, "data", "hostturn.db");
+// Use persistent volume if available (/data on Railway), otherwise fall back to local
+const VOLUME_PATH = "/data";
+const fs = require("fs");
+const useVolume = fs.existsSync(VOLUME_PATH);
+const DB_DIR = useVolume ? VOLUME_PATH : path.join(__dirname, "data");
+const DB_PATH = path.join(DB_DIR, "hostturn.db");
 
 let db;
 
 function getDb() {
   if (!db) {
-    const fs = require("fs");
-    fs.mkdirSync(path.join(__dirname, "data"), { recursive: true });
+    fs.mkdirSync(DB_DIR, { recursive: true });
     db = new Database(DB_PATH);
     db.pragma("journal_mode = WAL");
     db.pragma("foreign_keys = ON");
+    console.log("[DB] Database at:", DB_PATH, useVolume ? "(persistent volume)" : "(ephemeral)");
     initTables();
   }
   return db;
