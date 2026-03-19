@@ -76,7 +76,12 @@ async function syncProperties() {
     const rawData = await bwFetch("/property?limit=100&page=" + page);
     const pageResults = rawData.results || rawData.data || [];
     allData = allData.concat(pageResults);
-    totalPages = rawData.total_pages || 1;
+    // Handle different pagination field names
+    if (page === 1) {
+      const totalResults = rawData.total_results || rawData.total || rawData.count || 0;
+      totalPages = rawData.total_pages || rawData.pages || Math.ceil(totalResults / 100) || 1;
+      console.log("[BW] Pagination: total_results=" + totalResults + " total_pages=" + totalPages + " raw_keys=" + Object.keys(rawData).join(","));
+    }
     console.log("[BW] Fetched property page " + page + "/" + totalPages + " (" + pageResults.length + " results)");
     page++;
   }
@@ -177,7 +182,75 @@ async function syncTasksForDate(date) {
       // Determine expected arrival: 10am for checkout day, 9am for vacant
       const isCheckout = 1; // Default to checkout; can be refined with reservation data
       const expectedArrival = existing?.expected_arrival || (isCheckout ? "10:00" : "09:00");
-      const rate = existing?.rate || propDb?.rate || 0;
+      
+      // Rate lookup table from Rate Sheet
+      const RATE_TABLE = {
+        "bridgewater, 732 bridgewater center rd": 400,
+        "dorset, 109 nichols hill lane": 300,
+        "dover, 185 tanglewood 56b": 280,
+        "dover, 2320 lower dover": 380,
+        "dover, 6 johnson hill": 300,
+        "jamaica, 20 jamie ln": 450,
+        "killington - 5983 us rt. 4": 185,
+        "killington, 49 timberline rd n": 275,
+        "killington, 163 lakewood dr": 450,
+        "londonderry, 23 hemlock dr": 330,
+        "ludlow, 147 deerfield rd": 365,
+        "ludlow, 18 high street": 410,
+        "ludlow, okemo mtn lodge a303": 140,
+        "ludlow, okemo mtn lodge a309": 140,
+        "monkton, 1387 monkton rd": 180,
+        "mt holly, 148 belmont rd": 250,
+        "mt holly, 4261 vt-103": 135,
+        "peru, 127 sap bucket": 280,
+        "rutland - 122 oak st": 200,
+        "stratton - 2b stratton springs rd": 300,
+        "stratton, 653 stratton arlington rd": 235,
+        "stratton, 761 stratton mt rd": 170,
+        "wilmington, 17 cornell way": 150,
+        "wilmington, 8 splatter foot": 210,
+        "winhall, 44 hilltop rd": 400,
+        "ludlow - 8 andover st": 285,
+        "west dover, 255 valley view rd": 300,
+        "wardsboro, 704 fay boyden rd": 350,
+        "jamaica, 1 benson fuller dr": 400,
+        "jamaica, 32 benson fuller dr": 400,
+        "dover - 24 bluebrook rd": 450,
+        "winhall - 65 lower taylor hill": 365,
+        "winhall - 57 garden loop rd": 365,
+        "ludlow, winterplace": 140,
+        "ludlow, trailside": 140,
+        "ludlow, kettlebrook": 140,
+        "ludlow, solitude": 140,
+        "ludlow, ledgewood": 140,
+        "ludlow, brookhaven": 140,
+        "ludlow, mill 303": 140,
+        "ludlow, 30 pond st": 140,
+        "ludlow, 31 lake pauline": 140,
+        "ludlow, 21 blue ridge": 140,
+        "ludlow, 183 upper crossroad": 140,
+        "ludlow, 25 trailside rd": 140,
+        "ludlow, bixby house": 140,
+        "ludlow, 598 east lake rd": 140,
+        "dover, 17j snow tree ln": 280,
+        "wilmington, 1 darrah loop": 210,
+        "wilmington, 84 mowing": 210,
+        "wilmington, 43 winter haven": 210,
+        "wilmington, 87 elwell heights": 210,
+      };
+      
+      // Look up rate by matching property name
+      let rate = existing?.rate || 0;
+      if (!rate) {
+        const propNameLower = (t._prop.name || "").toLowerCase();
+        for (const [key, val] of Object.entries(RATE_TABLE)) {
+          if (propNameLower.includes(key)) {
+            rate = val;
+            break;
+          }
+        }
+      }
+      if (!rate) rate = propDb?.rate || 0;
 
       upsert.run(
         id, date, t.id, t._prop.id, t._prop.name || "", t._prop.group_name || "",
