@@ -119,17 +119,12 @@
         var s = (j.bw_status || '').toLowerCase();
         return (s === 'finished' || s === 'closed' || s === 'completed') && !j.closeout_email_sent_at;
       });
-      document.getElementById('closeout-btn').style.display = pendingCloseouts.length > 0 ? 'inline-flex' : 'none';
-      // Show closeout button on Today tab if there are finished jobs without closeout emails
-      var finishedWithout = todayJobs.filter(function(j){
-        var s = (j.bw_status||'').toLowerCase();
-        return (s==='finished'||s==='closed'||s==='completed') && !j.closeout_email_sent_at;
-      });
       var cbtn = document.getElementById('closeout-btn');
-      if (tab === 'today' && finishedWithout.length) {
+      if (pendingCloseouts.length > 0) {
         cbtn.style.display = 'inline-flex';
-        cbtn.textContent = '💰 Send Close-Out Emails (' + finishedWithout.length + ')';
-      } else if (tab === 'today' && todayJobs.some(function(j){return j.closeout_email_sent_at})) {
+        cbtn.textContent = '💰 Send Close-Out Emails (' + pendingCloseouts.length + ')';
+        cbtn.style.background = '#a855f7'; cbtn.style.color = '#fff';
+      } else if (activeJobs.some(function(j){return j.closeout_email_sent_at})) {
         cbtn.style.display = 'inline-flex';
         cbtn.textContent = '✅ Close-Outs Sent';
         cbtn.style.background = 'var(--accent)'; cbtn.style.color = '#000';
@@ -154,16 +149,21 @@
         }
         // Update owner button
         var obtn = document.getElementById('owner-btn');
-        var allOwnerNotified = tomorrowJobs.every(function(j){return j.owner_notified_at});
+        var notifiedCount = tomorrowJobs.filter(function(j){return j.owner_notified_at}).length;
+        var allOwnerNotified = notifiedCount === tomorrowJobs.length;
         var allOwnerConfirmed = tomorrowJobs.every(function(j){return j.owner_confirmed_at});
+        var pendingOwners = tomorrowJobs.length - notifiedCount;
         if (allOwnerConfirmed) {
           obtn.textContent = '✅ Owners Confirmed';
           obtn.style.background = 'var(--accent)'; obtn.style.color = '#000';
         } else if (allOwnerNotified) {
-          obtn.textContent = '📧 Resend to Owners';
+          obtn.textContent = '✅ Owners Notified (' + notifiedCount + '/' + tomorrowJobs.length + ')';
+          obtn.style.background = 'var(--accent)'; obtn.style.color = '#000';
+        } else if (notifiedCount > 0) {
+          obtn.textContent = '📧 Notify Remaining (' + pendingOwners + ')';
           obtn.style.background = 'var(--warn)'; obtn.style.color = '#000';
         } else {
-          obtn.textContent = '📧 Notify Owners';
+          obtn.textContent = '📧 Notify Owners (' + tomorrowJobs.length + ')';
           obtn.style.background = 'var(--warn)'; obtn.style.color = '#000';
         }
       }
@@ -247,44 +247,60 @@
 
     async function sendSchedule() {
       if (!tomorrowJobs.length) { alert('No jobs scheduled for tomorrow. Sync first.'); return; }
+      var assignedJobs = tomorrowJobs.filter(function(j){return j.cleaner_name});
+      var alreadySent = assignedJobs.every(function(j){return j.schedule_sent_at});
+      if (alreadySent) {
+        if (!confirm('Schedule was already sent to all cleaners. Send again anyway?')) return;
+      }
       var cleanerList = [];
       tomorrowJobs.forEach(function(j){ if(j.cleaner_name && cleanerList.indexOf(j.cleaner_name)===-1) cleanerList.push(j.cleaner_name); });
-      var msg = 'Send tomorrow\'s schedule via SMS to ' + cleanerList.length + ' cleaner(s)?\n\n';
-      cleanerList.forEach(function(c) {
-        var count = tomorrowJobs.filter(function(j){return j.cleaner_name===c}).length;
-        msg += '• ' + c + ' (' + count + ' job' + (count>1?'s':'') + ')\n';
-      });
-      if (!confirm(msg)) return;
+      if (!alreadySent) {
+        var msg = 'Send tomorrow\'s schedule via SMS to ' + cleanerList.length + ' cleaner(s)?\n\n';
+        cleanerList.forEach(function(c) {
+          var count = tomorrowJobs.filter(function(j){return j.cleaner_name===c}).length;
+          msg += '• ' + c + ' (' + count + ' job' + (count>1?'s':'') + ')\n';
+        });
+        if (!confirm(msg)) return;
+      }
       var btn = document.getElementById('send-btn');
       btn.disabled = true; btn.textContent = 'Sending...';
       try {
         var r = await fetch('/api/send-schedule', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:tomorrowDate})});
         var data = await r.json();
-        if (data.error) { btn.textContent = 'Error: ' + data.error; }
-        else { btn.textContent = 'Sent to ' + data.sent + ' of ' + data.total + ' cleaners!'; }
-        setTimeout(function(){ btn.textContent = '📩 Send Schedule to Cleaners'; btn.disabled = false; }, 5000);
+        if (data.error) { btn.textContent = 'Error: ' + data.error; btn.disabled = false; }
+        else {
+          btn.textContent = 'Sent to ' + data.sent + ' of ' + data.total + ' cleaners!';
+          setTimeout(function(){ loadAllJobs(); btn.disabled = false; }, 2000);
+        }
       } catch(e) {
         btn.textContent = 'Error!';
-        setTimeout(function(){ btn.textContent = '📩 Send Schedule to Cleaners'; btn.disabled = false; }, 3000);
+        setTimeout(function(){ btn.disabled = false; loadAllJobs(); }, 2000);
       }
     }
 
     async function notifyOwners() {
       if (!tomorrowJobs.length) { alert('No jobs scheduled for tomorrow. Sync first.'); return; }
-      var msg = 'Send owner notifications (email + SMS) for tomorrow\'s ' + tomorrowJobs.length + ' job(s)?\n\nOwners will be asked to confirm checkout times.';
-      if (!confirm(msg)) return;
+      var pendingJobs = tomorrowJobs.filter(function(j){return !j.owner_notified_at});
+      if (!pendingJobs.length) {
+        if (!confirm('All owners have already been notified. Send again anyway?')) return;
+      } else {
+        var msg = 'Send owner notifications for ' + pendingJobs.length + ' job(s) not yet notified?\n\n';
+        pendingJobs.forEach(function(j){ msg += '• ' + j.property_name + '\n'; });
+        if (!confirm(msg)) return;
+      }
       var btn = document.getElementById('owner-btn');
       btn.disabled = true; btn.textContent = 'Sending...';
       try {
         var r = await fetch('/api/send-owner-notifications', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:tomorrowDate})});
         var data = await r.json();
-        if (data.error) { btn.textContent = 'Error: ' + data.error; }
-        else { btn.textContent = 'Notified ' + data.sent + ' of ' + data.total + ' owners!'; }
-        setTimeout(function(){ btn.textContent = '📧 Notify Owners'; btn.disabled = false; }, 5000);
-        loadAllJobs();
+        if (data.error) { btn.textContent = 'Error: ' + data.error; btn.disabled = false; }
+        else {
+          btn.textContent = 'Notified ' + data.sent + ' of ' + data.total + ' owners!';
+          setTimeout(function(){ loadAllJobs(); btn.disabled = false; }, 2000);
+        }
       } catch(e) {
         btn.textContent = 'Error!';
-        setTimeout(function(){ btn.textContent = '📧 Notify Owners'; btn.disabled = false; }, 3000);
+        setTimeout(function(){ btn.disabled = false; loadAllJobs(); }, 2000);
       }
     }
 
