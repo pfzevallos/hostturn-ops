@@ -147,13 +147,18 @@ async function syncTasksForDate(date) {
   console.log(`[BW] Task sync: checked ${checkedCount} props, ${errorCount} errors, found ${allTasks.length} tasks for ${date}`);
 
   // Remove stale jobs that no longer exist in Breezeway for this date
-  const bwTaskIds = allTasks.map(t => t.id);
+  // IMPORTANT: Breezeway task IDs may be stored as floats (e.g. "137831817.0") 
+  // but come from API as integers. Normalize both for comparison.
+  const bwTaskIds = allTasks.map(t => String(parseInt(t.id, 10)));
   const existingJobs = db.prepare("SELECT id, bw_task_id FROM jobs WHERE date = ?").all(date);
   for (const ej of existingJobs) {
-    if (ej.bw_task_id && !bwTaskIds.includes(ej.bw_task_id)) {
-      db.prepare("DELETE FROM job_steps WHERE job_id = ?").run(ej.id);
-      db.prepare("DELETE FROM jobs WHERE id = ?").run(ej.id);
-      console.log(`[BW] Removed stale job ${ej.id} (task ${ej.bw_task_id}) for ${date}`);
+    if (ej.bw_task_id) {
+      const normalizedId = String(parseInt(ej.bw_task_id, 10));
+      if (!bwTaskIds.includes(normalizedId)) {
+        db.prepare("DELETE FROM job_steps WHERE job_id = ?").run(ej.id);
+        db.prepare("DELETE FROM jobs WHERE id = ?").run(ej.id);
+        console.log(`[BW] Removed stale job ${ej.id} (task ${ej.bw_task_id}) for ${date}`);
+      }
     }
   }
 
@@ -168,7 +173,8 @@ async function syncTasksForDate(date) {
 
   const insertMany = db.transaction(() => {
     for (const t of allTasks) {
-      const existing = db.prepare("SELECT * FROM jobs WHERE bw_task_id = ?").get(t.id);
+      const existing = db.prepare("SELECT * FROM jobs WHERE bw_task_id = ? OR bw_task_id = ? OR bw_task_id = ?")
+        .get(String(t.id), String(t.id) + ".0", String(parseInt(t.id, 10)));
       const id = existing ? existing.id : "j" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
       const propDb = db.prepare("SELECT * FROM properties WHERE id = ?").get(t._prop.id);
       const cleaner = t.assignments?.[0]?.name || t.assignees?.[0]?.full_name || existing?.cleaner_name || "";
