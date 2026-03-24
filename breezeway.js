@@ -68,29 +68,16 @@ async function bwFetch(path) {
 
 // Fetch and cache all properties
 async function syncProperties() {
-  // Fetch all pages of properties
-  let allData = [];
-  let page = 1;
-  let totalPages = 1;
-  while (page <= totalPages) {
-    const rawData = await bwFetch("/property?limit=100&page=" + page);
-    const pageResults = rawData.results || rawData.data || [];
-    allData = allData.concat(pageResults);
-    // Handle different pagination field names
-    if (page === 1) {
-      const totalResults = rawData.total_results || rawData.total || rawData.count || 0;
-      totalPages = rawData.total_pages || rawData.pages || Math.ceil(totalResults / 100) || 1;
-      console.log("[BW] Pagination: total_results=" + totalResults + " total_pages=" + totalPages + " raw_keys=" + Object.keys(rawData).join(","));
-    }
-    console.log("[BW] Fetched property page " + page + "/" + totalPages + " (" + pageResults.length + " results)");
-    page++;
-  }
+  // Fetch all properties in one call (limit=200 covers all)
+  const rawData = await bwFetch("/property?limit=200");
+  let allData = rawData.results || rawData.data || [];
+  console.log("[BW] Fetched " + allData.length + " total properties (total_results=" + (rawData.total_results || "?") + ")");
   
   let data = allData;
   
   // Filter out inactive properties
-  data = data.filter(p => p.status !== "inactive");
-  console.log("[BW] Total:", allData.length, "Active:", data.length, "properties");
+  data = data.filter(p => p.status === "active");
+  console.log("[BW] Active properties:", data.length, "of", allData.length, "total");
   
   if (!data.length) return [];
   const db = getDb();
@@ -272,6 +259,66 @@ async function syncTasksForDate(date) {
       }
       if (t.name) {
         db.prepare("UPDATE jobs SET bw_task_name = ? WHERE id = ?").run(t.name, id);
+      }
+      
+      // Cleaner rate lookup - maps property keyword + cleaner name to pay rate
+      const CLEANER_RATES = {
+        "leyner": {
+          "185 tanglewood": 165, "2320 lower dover": 250, "6 johnson hill": 200,
+          "20 jamie ln": 250, "5983 us rt. 4": 135, "49 timberline": 150,
+          "23 hemlock": 190, "18 high street": 190, "okemo mtn lodge a303": 85,
+          "okemo mtn lodge a309": 85, "1387 monkton": 160, "4261 vt-103": 85,
+          "127 sap bucket": 145, "122 oak st": 128, "2b stratton springs": 170,
+          "653 stratton arlington": 150, "761 stratton mt rd": 95,
+          "17 cornell way": 100, "8 splatter foot": 145, "44 hilltop": 195,
+          "704 fay boyden": 200, "1 benson fuller": 290, "32 benson fuller": 270,
+          "long trail house 458": 130
+        },
+        "paola": {
+          "185 tanglewood": 165, "2320 lower dover": 250, "6 johnson hill": 200,
+          "20 jamie ln": 250, "5983 us rt. 4": 135, "49 timberline": 150,
+          "23 hemlock": 190, "18 high street": 190, "okemo mtn lodge a303": 85,
+          "okemo mtn lodge a309": 85, "1387 monkton": 160, "4261 vt-103": 85,
+          "127 sap bucket": 145, "122 oak st": 128, "2b stratton springs": 170,
+          "653 stratton arlington": 150, "761 stratton mt rd": 95,
+          "17 cornell way": 100, "8 splatter foot": 145, "44 hilltop": 195,
+          "704 fay boyden": 200, "1 benson fuller": 290, "32 benson fuller": 270,
+          "long trail house 458": 130
+        },
+        "byron ramos": {
+          "185 tanglewood": 160, "6 johnson hill": 140, "23 hemlock": 190,
+          "147 deerfield": 185, "18 high street": 190, "4261 vt-103": 100,
+          "127 sap bucket": 150, "653 stratton arlington": 150, "761 stratton mt rd": 95,
+          "17 cornell way": 100, "8 splatter foot": 140, "8 andover st": 180,
+          "255 valley view": 190
+        },
+        "magiber duche": {
+          "5983 us rt. 4": 135, "okemo mtn lodge a303": 85,
+          "127 sap bucket": 140, "2b stratton springs": 120,
+          "653 stratton arlington": 110
+        },
+        "christian": {
+          "okemo mtn lodge a309": 80
+        }
+      };
+      
+      // Look up cleaner rate
+      const cleanerNameLower = (cleaner || "").toLowerCase().trim();
+      const propNameLower2 = (t._prop.name || "").toLowerCase();
+      let cleanerRate = existing?.cleaner_rate || 0;
+      if (!cleanerRate && cleanerNameLower) {
+        const cleanerRates = CLEANER_RATES[cleanerNameLower];
+        if (cleanerRates) {
+          for (const [key, val] of Object.entries(cleanerRates)) {
+            if (propNameLower2.includes(key)) {
+              cleanerRate = val;
+              break;
+            }
+          }
+        }
+      }
+      if (cleanerRate) {
+        db.prepare("UPDATE jobs SET cleaner_rate = ? WHERE id = ?").run(cleanerRate, id);
       }
 
       // Ensure job_steps exist
