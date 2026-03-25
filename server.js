@@ -311,6 +311,13 @@ app.get("/api/debug/bw-properties", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Get property count from local DB
+app.get("/api/properties/count", (req, res) => {
+  const db = getDb();
+  const count = db.prepare("SELECT COUNT(*) as c FROM properties").get();
+  res.json({ count: count.c });
+});
+
 // Update property rates by matching property name keywords
 app.post("/api/properties/set-rates", (req, res) => {
   const db = getDb();
