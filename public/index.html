@@ -74,6 +74,7 @@
     <div class="tabs">
       <div class="tab active" id="tab-today" onclick="switchTab('today')">Today <span class="count" id="count-today">—</span></div>
       <div class="tab" id="tab-tomorrow" onclick="switchTab('tomorrow')">Tomorrow <span class="count" id="count-tomorrow">—</span></div>
+      <div class="tab" id="tab-payments" onclick="switchTab('payments')">Payments 💰</div>
     </div>
     <div class="section-header">
       <h2 id="schedule-title">Today's Schedule</h2>
@@ -87,6 +88,46 @@
     </div>
     <div id="jobs" class="jobs-grid">
       <div class="loading"><div class="spinner"></div><p style="margin-top:12px">Loading jobs...</p></div>
+    </div>
+    <div id="payments-section" style="display:none">
+      <div class="stats" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px;">
+        <div class="stat"><div class="label">Owner Revenue</div><div class="value green" id="p-revenue">$0</div></div>
+        <div class="stat"><div class="label">Owner Paid</div><div class="value green" id="p-paid">$0</div></div>
+        <div class="stat"><div class="label">Outstanding</div><div class="value" style="color:var(--warn)" id="p-outstanding">$0</div></div>
+        <div class="stat"><div class="label">Cleaner Owed</div><div class="value" style="color:var(--danger)" id="p-cleaner-owed">$0</div></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
+        <label style="font-size:13px;color:var(--text2)">From:</label>
+        <input type="date" id="p-start" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:13px;">
+        <label style="font-size:13px;color:var(--text2)">To:</label>
+        <input type="date" id="p-end" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:13px;">
+        <button class="btn" onclick="loadPayments()" style="font-size:12px;padding:6px 12px;">Filter</button>
+        <select id="p-filter" onchange="renderPayments()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:13px;">
+          <option value="all">All Jobs</option>
+          <option value="owner-open">Owner Unpaid</option>
+          <option value="owner-paid">Owner Paid</option>
+          <option value="cleaner-unpaid">Cleaner Unpaid</option>
+          <option value="cleaner-paid">Cleaner Paid</option>
+        </select>
+      </div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;" id="payments-table">
+          <thead>
+            <tr style="background:var(--surface2);text-align:left;">
+              <th style="padding:10px;border-bottom:1px solid var(--border);">Date</th>
+              <th style="padding:10px;border-bottom:1px solid var(--border);">Property</th>
+              <th style="padding:10px;border-bottom:1px solid var(--border);">Status</th>
+              <th style="padding:10px;border-bottom:1px solid var(--border);">Owner Rate</th>
+              <th style="padding:10px;border-bottom:1px solid var(--border);">Invoice</th>
+              <th style="padding:10px;border-bottom:1px solid var(--border);">Owner Payment</th>
+              <th style="padding:10px;border-bottom:1px solid var(--border);">Cleaner</th>
+              <th style="padding:10px;border-bottom:1px solid var(--border);">Cleaner Rate</th>
+              <th style="padding:10px;border-bottom:1px solid var(--border);">Cleaner Payment</th>
+            </tr>
+          </thead>
+          <tbody id="payments-body"></tbody>
+        </table>
+      </div>
     </div>
   </div>
   <script>
@@ -109,6 +150,17 @@
       currentTab = tab;
       document.getElementById('tab-today').className = tab === 'today' ? 'tab active' : 'tab';
       document.getElementById('tab-tomorrow').className = tab === 'tomorrow' ? 'tab active' : 'tab';
+      document.getElementById('tab-payments').className = tab === 'payments' ? 'tab active' : 'tab';
+      
+      // Show/hide sections
+      document.getElementById('jobs').style.display = tab === 'payments' ? 'none' : 'block';
+      document.getElementById('payments-section').style.display = tab === 'payments' ? 'block' : 'none';
+      document.querySelector('.section-header').style.display = tab === 'payments' ? 'none' : 'flex';
+      
+      if (tab === 'payments') {
+        loadPayments();
+        return;
+      }
       document.getElementById('schedule-title').textContent = tab === 'today' ? "Today's Schedule" : "Tomorrow's Schedule";
       document.getElementById('display-date').textContent = formatDate(tab === 'today' ? todayDate : tomorrowDate);
       document.getElementById('send-btn').style.display = tab === 'tomorrow' ? 'inline-flex' : 'none';
@@ -218,7 +270,7 @@
         document.getElementById('s-cleaners').textContent = cleaners.length;
         document.getElementById('count-today').textContent = todayJobs.length;
         document.getElementById('count-tomorrow').textContent = tomorrowJobs.length;
-        try { var p = await (await fetch('/api/debug/bw-properties')).json(); document.getElementById('s-props').textContent = p.count || '--'; } catch(e){}
+        try { var p = await (await fetch('/api/properties/count')).json(); document.getElementById('s-props').textContent = p.count || '--'; } catch(e){}
         renderJobs();
         // Refresh button states
         switchTab(currentTab);
@@ -355,6 +407,113 @@
     }
 
     document.getElementById('display-date').textContent = formatDate(todayDate);
+    
+    // Payment tracker
+    var paymentData = { jobs: [], summary: {} };
+    
+    // Set default date range (start of current month to today)
+    var startOfMonth = todayDate.substring(0, 8) + '01';
+    document.getElementById('p-start').value = startOfMonth;
+    document.getElementById('p-end').value = todayDate;
+    
+    async function loadPayments() {
+      var start = document.getElementById('p-start').value || startOfMonth;
+      var end = document.getElementById('p-end').value || todayDate;
+      try {
+        var r = await fetch('/api/payment-tracker?start=' + start + '&end=' + end);
+        paymentData = await r.json();
+        // Update summary stats
+        var s = paymentData.summary || {};
+        document.getElementById('p-revenue').textContent = '$' + (s.totalOwnerRevenue || 0).toLocaleString();
+        document.getElementById('p-paid').textContent = '$' + (s.totalOwnerPaid || 0).toLocaleString();
+        document.getElementById('p-outstanding').textContent = '$' + (s.totalOwnerOpen || 0).toLocaleString();
+        document.getElementById('p-cleaner-owed').textContent = '$' + (s.totalCleanerOwed || 0).toLocaleString();
+        renderPayments();
+      } catch(e) {
+        document.getElementById('payments-body').innerHTML = '<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--text2)">Error loading data: ' + e.message + '</td></tr>';
+      }
+    }
+    
+    function renderPayments() {
+      var filter = document.getElementById('p-filter').value;
+      var jobs = (paymentData.jobs || []).filter(function(j) {
+        if (filter === 'owner-open') return j.rate > 0 && !j.owner_paid_at;
+        if (filter === 'owner-paid') return j.owner_paid_at;
+        if (filter === 'cleaner-unpaid') return j.cleaner_rate > 0 && !j.cleaner_paid_at;
+        if (filter === 'cleaner-paid') return j.cleaner_paid_at;
+        return true;
+      });
+      
+      if (!jobs.length) {
+        document.getElementById('payments-body').innerHTML = '<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--text2)">No jobs match this filter.</td></tr>';
+        return;
+      }
+      
+      document.getElementById('payments-body').innerHTML = jobs.map(function(j) {
+        var dateStr = new Date(j.date + 'T12:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric'});
+        var propShort = j.property_name.split(' - ')[0];
+        var st = (j.bw_status || 'Unknown').toLowerCase();
+        var statusBadge = st === 'finished' || st === 'closed' || st === 'completed' 
+          ? '<span class="badge completed">Finished</span>' 
+          : '<span class="badge created">' + (j.bw_status || '-') + '</span>';
+        
+        // Owner rate & invoice
+        var ownerRate = j.rate > 0 ? '$' + j.rate.toFixed(0) : '-';
+        var invoiceStatus = j.closeout_email_sent_at 
+          ? '<span style="color:var(--accent);font-size:11px">✅ Sent</span>' 
+          : j.rate > 0 ? '<span style="color:var(--text2);font-size:11px">Not sent</span>' : '-';
+        
+        // Owner payment
+        var ownerPayment;
+        if (j.rate === 0) {
+          ownerPayment = '<span style="color:var(--text2)">N/A</span>';
+        } else if (j.owner_paid_at) {
+          ownerPayment = '<button onclick="toggleOwnerPaid(\'' + j.id + '\', false)" style="background:var(--accent);color:#000;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">✅ Paid</button>';
+        } else {
+          ownerPayment = '<button onclick="toggleOwnerPaid(\'' + j.id + '\', true)" style="background:rgba(245,158,11,0.15);color:var(--warn);border:1px solid var(--warn);padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">Open</button>';
+        }
+        
+        // Cleaner info
+        var cleanerName = j.cleaner_name || '-';
+        var cleanerRate = j.cleaner_rate > 0 ? '$' + j.cleaner_rate.toFixed(0) : '-';
+        
+        // Cleaner payment
+        var cleanerPayment;
+        if (!j.cleaner_rate || j.cleaner_rate === 0) {
+          cleanerPayment = '<span style="color:var(--text2)">N/A</span>';
+        } else if (j.cleaner_paid_at) {
+          cleanerPayment = '<button onclick="toggleCleanerPaid(\'' + j.id + '\', false)" style="background:var(--accent);color:#000;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">✅ Paid</button>';
+        } else {
+          cleanerPayment = '<button onclick="toggleCleanerPaid(\'' + j.id + '\', true)" style="background:rgba(239,68,68,0.15);color:var(--danger);border:1px solid var(--danger);padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">Unpaid</button>';
+        }
+        
+        var rowStyle = 'border-bottom:1px solid var(--border);';
+        return '<tr style="' + rowStyle + '">' +
+          '<td style="padding:10px;">' + dateStr + '</td>' +
+          '<td style="padding:10px;font-weight:500;">' + propShort + '</td>' +
+          '<td style="padding:10px;">' + statusBadge + '</td>' +
+          '<td style="padding:10px;font-family:JetBrains Mono,monospace;font-weight:600;">' + ownerRate + '</td>' +
+          '<td style="padding:10px;">' + invoiceStatus + '</td>' +
+          '<td style="padding:10px;">' + ownerPayment + '</td>' +
+          '<td style="padding:10px;font-size:12px;">' + cleanerName + '</td>' +
+          '<td style="padding:10px;font-family:JetBrains Mono,monospace;font-weight:600;">' + cleanerRate + '</td>' +
+          '<td style="padding:10px;">' + cleanerPayment + '</td>' +
+        '</tr>';
+      }).join('');
+    }
+    
+    async function toggleOwnerPaid(jobId, markPaid) {
+      var endpoint = markPaid ? '/api/tracker/' + jobId + '/owner-paid' : '/api/tracker/' + jobId + '/owner-unpaid';
+      await fetch(endpoint, {method:'POST'});
+      loadPayments();
+    }
+    
+    async function toggleCleanerPaid(jobId, markPaid) {
+      var endpoint = markPaid ? '/api/tracker/' + jobId + '/cleaner-paid' : '/api/tracker/' + jobId + '/cleaner-unpaid';
+      await fetch(endpoint, {method:'POST'});
+      loadPayments();
+    }
+
     loadAllJobs();
     setInterval(loadAllJobs, 60000);
   </script>
