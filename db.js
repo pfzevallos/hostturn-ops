@@ -192,6 +192,9 @@ function initTables() {
   try { db.exec("ALTER TABLE jobs ADD COLUMN closeout_email_sent_at TEXT"); } catch(e) {}
   try { db.exec("ALTER TABLE jobs ADD COLUMN bw_report_url TEXT"); } catch(e) {}
   try { db.exec("ALTER TABLE jobs ADD COLUMN bw_task_name TEXT"); } catch(e) {}
+  try { db.exec("ALTER TABLE jobs ADD COLUMN cleaner_rate REAL DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE jobs ADD COLUMN owner_paid_at TEXT"); } catch(e) {}
+  try { db.exec("ALTER TABLE jobs ADD COLUMN cleaner_paid_at TEXT"); } catch(e) {}
   try { db.exec("ALTER TABLE contacts ADD COLUMN cc_email TEXT"); } catch(e) {}
 }
 
