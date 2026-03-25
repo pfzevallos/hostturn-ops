@@ -95,7 +95,17 @@ async function syncProperties() {
     }
   });
   insertMany();
-  console.log(`[BW] Synced ${data.length} properties`);
+  
+  // Remove properties from DB that are no longer active
+  const activeIds = data.map(p => String(Math.round(p.id)));
+  const dbProps = db.prepare("SELECT id FROM properties").all();
+  for (const dbp of dbProps) {
+    if (!activeIds.includes(String(dbp.id))) {
+      db.prepare("DELETE FROM properties WHERE id = ?").run(dbp.id);
+    }
+  }
+  
+  console.log(`[BW] Synced ${data.length} active properties, removed ${dbProps.length - data.length} inactive`);
   return data;
 }
 
