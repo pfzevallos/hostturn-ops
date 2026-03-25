@@ -313,10 +313,10 @@ async function syncTasksForDate(date) {
       };
       
       // Look up cleaner rate
-      const cleanerNameLower = (cleaner || "").toLowerCase().trim();
+      const cleanerNameLower = (cleaner || "").toLowerCase().trim().replace(/\s+/g, ' ');
       const propNameLower2 = (t._prop.name || "").toLowerCase();
-      let cleanerRate = existing?.cleaner_rate || 0;
-      if (!cleanerRate && cleanerNameLower) {
+      let cleanerRate = 0;
+      if (cleanerNameLower) {
         const cleanerRates = CLEANER_RATES[cleanerNameLower];
         if (cleanerRates) {
           for (const [key, val] of Object.entries(cleanerRates)) {
@@ -326,9 +326,24 @@ async function syncTasksForDate(date) {
             }
           }
         }
+        // Also check "paola" rates for "leyner" (same rates)
+        if (!cleanerRate && cleanerNameLower === "paola") {
+          const leynerRates = CLEANER_RATES["leyner"];
+          if (leynerRates) {
+            for (const [key, val] of Object.entries(leynerRates)) {
+              if (propNameLower2.includes(key)) {
+                cleanerRate = val;
+                break;
+              }
+            }
+          }
+        }
       }
       if (cleanerRate) {
         db.prepare("UPDATE jobs SET cleaner_rate = ? WHERE id = ?").run(cleanerRate, id);
+        console.log(`[BW] Cleaner rate for ${cleaner} at ${t._prop.name}: $${cleanerRate}`);
+      } else if (cleaner) {
+        console.log(`[BW] No cleaner rate found for "${cleanerNameLower}" at "${propNameLower2}"`);
       }
 
       // Ensure job_steps exist
