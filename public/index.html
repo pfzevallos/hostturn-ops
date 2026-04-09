@@ -451,7 +451,8 @@
       
       document.getElementById('payments-body').innerHTML = jobs.map(function(j) {
         var dateStr = new Date(j.date + 'T12:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric'});
-        var propShort = j.property_name.split(' - ')[0];
+        var propParts = j.property_name.split(' - ');
+        var propShort = propParts.length > 2 ? propParts[0] + ' - ' + propParts[1] : propParts[0];
         var st = (j.bw_status || 'Unknown').toLowerCase();
         var statusBadge = st === 'finished' || st === 'closed' || st === 'completed' 
           ? '<span class="badge completed">Finished</span>' 
