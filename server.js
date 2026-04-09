@@ -256,8 +256,14 @@ app.get("/api/payment-tracker", (req, res) => {
     ORDER BY date DESC, property_name
   `).all(startDate, endDate);
   
-  // Summary stats
-  const finished = jobs.filter(j => ['finished','closed','completed'].includes((j.bw_status||'').toLowerCase()));
+  // Filter out admin jobs (Pedro/Lizzy are company owners, not cleaners)
+  const ADMIN_NAMES = ["pedro zevallos", "lizzy zevallos"];
+  const finished = jobs.filter(j => {
+    const isFinished = ['finished','closed','completed'].includes((j.bw_status||'').toLowerCase());
+    const cleanerNorm = (j.cleaner_name||'').toLowerCase().replace(/\s+/g, ' ').trim();
+    const isAdmin = ADMIN_NAMES.includes(cleanerNorm);
+    return isFinished && !isAdmin;
+  });
   const totalOwnerRevenue = finished.reduce((s,j) => s + (j.rate || 0), 0);
   const totalOwnerPaid = finished.filter(j => j.owner_paid_at).reduce((s,j) => s + (j.rate || 0), 0);
   const totalOwnerOpen = totalOwnerRevenue - totalOwnerPaid;
