@@ -36,13 +36,20 @@
     .btn.blue { background:var(--blue); color:#fff; }
     .btn.blue:hover { background:#2563eb; }
     .jobs-grid { display:flex; flex-direction:column; gap:12px; }
-    .job-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; display:grid; grid-template-columns:1fr 180px 140px 100px; align-items:center; gap:16px; transition:all 0.2s; }
+    .job-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; display:grid; grid-template-columns:1fr 160px 100px 60px auto; align-items:center; gap:12px; transition:all 0.2s; }
     .job-card:hover { border-color:var(--accent); background:var(--surface2); }
     .job-card .prop { font-weight:600; font-size:15px; margin-bottom:4px; }
     .job-card .group { font-size:12px; color:var(--text2); }
     .job-card .cleaner { display:flex; align-items:center; gap:8px; }
     .job-card .cleaner .avatar { width:32px; height:32px; border-radius:50%; background:var(--surface2); border:2px solid var(--accent); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:600; color:var(--accent); flex-shrink:0; }
     .job-card .cleaner .name { font-weight:500; font-size:14px; }
+    .job-card .progress-checks { display:flex; gap:12px; align-items:center; }
+    .job-card .check-item { display:flex; flex-direction:column; align-items:center; gap:2px; cursor:pointer; }
+    .job-card .check-item input[type="checkbox"] { width:18px; height:18px; cursor:pointer; accent-color:var(--accent); }
+    .job-card .check-item .check-label { font-size:9px; color:var(--text2); text-align:center; line-height:1.2; }
+    .job-card .report-link { font-size:11px; }
+    .job-card .report-link a { color:var(--blue); text-decoration:none; }
+    .job-card .report-link a:hover { text-decoration:underline; }
     .badge { display:inline-block; padding:4px 10px; border-radius:20px; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; }
     .badge.pending { background:rgba(245,158,11,0.15); color:var(--warn); }
     .badge.created { background:rgba(59,130,246,0.15); color:var(--blue); }
@@ -250,7 +257,28 @@
         if (j.closeout_email_sent_at) {
           ownerStatus += '<span style="font-size:11px;color:var(--accent);margin-left:4px">💰 Invoice Sent</span>';
         }
-        return '<div class="job-card"><div><div class="prop">' + j.property_name + '</div><div class="group">' + (j.group_name || '') + ownerStatus + '</div></div><div class="cleaner"><div class="avatar">' + init + '</div><div><div class="name">' + (j.cleaner_name || 'Unassigned') + '</div>' + smsStatus + '</div></div><div><span class="badge ' + sc + '">' + st + '</span></div><div class="time">' + (j.expected_arrival || '') + '</div></div>';
+        // Progress checkboxes and report link (Today tab only)
+        var progressHtml = '';
+        if (currentTab === 'today') {
+          var arrChecked = j.arrival_confirmed_at ? 'checked' : '';
+          var rptChecked = j.report_verified_at ? 'checked' : '';
+          var reportLink = j.bw_report_url 
+            ? '<a href="' + j.bw_report_url + '" target="_blank" title="View Cleaning Report">📋 Report</a>' 
+            : '<span style="color:var(--text2)">—</span>';
+          progressHtml = '<div class="progress-checks">' +
+            '<div class="check-item" onclick="toggleArrival(\'' + j.id + '\')">' +
+              '<input type="checkbox" ' + arrChecked + ' onclick="event.stopPropagation();toggleArrival(\'' + j.id + '\')">' +
+              '<span class="check-label">Arrival /<br>Progress</span>' +
+            '</div>' +
+            '<div class="check-item" onclick="toggleReport(\'' + j.id + '\')">' +
+              '<input type="checkbox" ' + rptChecked + ' onclick="event.stopPropagation();toggleReport(\'' + j.id + '\')">' +
+              '<span class="check-label">Report<br>Verified</span>' +
+            '</div>' +
+          '</div>' +
+          '<div class="report-link">' + reportLink + '</div>';
+        }
+        
+        return '<div class="job-card"><div><div class="prop">' + j.property_name + '</div><div class="group">' + (j.group_name || '') + ownerStatus + '</div></div><div class="cleaner"><div class="avatar">' + init + '</div><div><div class="name">' + (j.cleaner_name || 'Unassigned') + '</div>' + smsStatus + '</div></div><div><span class="badge ' + sc + '">' + st + '</span></div><div class="time">' + (j.expected_arrival || '') + '</div>' + progressHtml + '</div>';
       }).join('');
     }
 
@@ -277,6 +305,16 @@
       } catch(e) {
         document.getElementById('jobs').innerHTML = '<div class="empty"><p>Error: ' + e.message + '</p></div>';
       }
+    }
+
+    async function toggleArrival(jobId) {
+      await fetch('/api/jobs/' + jobId + '/arrival-confirmed', {method:'POST'});
+      loadAllJobs();
+    }
+    
+    async function toggleReport(jobId) {
+      await fetch('/api/jobs/' + jobId + '/report-verified', {method:'POST'});
+      loadAllJobs();
     }
 
     async function syncTasks() {
