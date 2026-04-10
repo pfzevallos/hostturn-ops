@@ -299,6 +299,30 @@ app.post("/api/tracker/:jobId/cleaner-unpaid", (req, res) => {
   res.json({ ok: true });
 });
 
+// Toggle arrival confirmed
+app.post("/api/jobs/:jobId/arrival-confirmed", (req, res) => {
+  const db = getDb();
+  const job = db.prepare("SELECT arrival_confirmed_at FROM jobs WHERE id = ?").get(req.params.jobId);
+  if (job && job.arrival_confirmed_at) {
+    db.prepare("UPDATE jobs SET arrival_confirmed_at = NULL WHERE id = ?").run(req.params.jobId);
+  } else {
+    db.prepare("UPDATE jobs SET arrival_confirmed_at = datetime('now') WHERE id = ?").run(req.params.jobId);
+  }
+  res.json({ ok: true });
+});
+
+// Toggle report verified
+app.post("/api/jobs/:jobId/report-verified", (req, res) => {
+  const db = getDb();
+  const job = db.prepare("SELECT report_verified_at FROM jobs WHERE id = ?").get(req.params.jobId);
+  if (job && job.report_verified_at) {
+    db.prepare("UPDATE jobs SET report_verified_at = NULL WHERE id = ?").run(req.params.jobId);
+  } else {
+    db.prepare("UPDATE jobs SET report_verified_at = datetime('now') WHERE id = ?").run(req.params.jobId);
+  }
+  res.json({ ok: true });
+});
+
 // --- Breezeway sync ---
 app.post("/api/sync/properties", async (req, res) => {
   try { const data = await bw.syncProperties(); res.json({ count: data.length }); }
