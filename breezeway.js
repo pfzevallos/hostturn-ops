@@ -174,7 +174,20 @@ async function syncTasksForDate(date) {
         .get(String(t.id), String(t.id) + ".0", String(parseInt(t.id, 10)));
       const id = existing ? existing.id : "j" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
       const propDb = db.prepare("SELECT * FROM properties WHERE id = ?").get(t._prop.id);
-      const cleaner = t.assignments?.[0]?.name || t.assignees?.[0]?.full_name || existing?.cleaner_name || "";
+      let cleaner = t.assignments?.[0]?.name || t.assignees?.[0]?.full_name || existing?.cleaner_name || "";
+      // Skip admin-assigned tasks — Pedro and Lizzy are company owners, not cleaners
+      // These tasks should not appear on the Ops board at all
+      const ADMIN_NAMES = ["pedro zevallos", "lizzy zevallos"];
+      const cleanerNorm = (cleaner || "").toLowerCase().replace(/\s+/g, ' ').trim();
+      if (ADMIN_NAMES.some(a => cleanerNorm.includes(a))) {
+        // Delete any existing job for this admin task
+        if (existing) {
+          db.prepare("DELETE FROM job_steps WHERE job_id = ?").run(existing.id);
+          db.prepare("DELETE FROM jobs WHERE id = ?").run(existing.id);
+          console.log(`[BW] Removed admin task: ${cleaner} at ${t._prop.name}`);
+        }
+        continue; // Skip this task entirely
+      }
       const typeStatus = typeof t.type_task_status === 'string' ? JSON.parse(t.type_task_status || '{}') : (t.type_task_status || {});
       const status = typeStatus.name || typeStatus.code || t.status?.name || t.status?.code || "";
       const startedAt = t.started_at || existing?.bw_started_at || null;
