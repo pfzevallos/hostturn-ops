@@ -195,6 +195,8 @@ function initTables() {
   try { db.exec("ALTER TABLE jobs ADD COLUMN cleaner_rate REAL DEFAULT 0"); } catch(e) {}
   try { db.exec("ALTER TABLE jobs ADD COLUMN owner_paid_at TEXT"); } catch(e) {}
   try { db.exec("ALTER TABLE jobs ADD COLUMN cleaner_paid_at TEXT"); } catch(e) {}
+  try { db.exec("ALTER TABLE jobs ADD COLUMN arrival_confirmed_at TEXT"); } catch(e) {}
+  try { db.exec("ALTER TABLE jobs ADD COLUMN report_verified_at TEXT"); } catch(e) {}
   try { db.exec("ALTER TABLE contacts ADD COLUMN cc_email TEXT"); } catch(e) {}
 }
 
