@@ -490,8 +490,19 @@
       
       document.getElementById('payments-body').innerHTML = jobs.map(function(j) {
         var dateStr = new Date(j.date + 'T12:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric'});
+        // Show full property name minus the owner/group suffix
         var propParts = j.property_name.split(' - ');
-        var propShort = propParts.length > 2 ? propParts[0] + ' - ' + propParts[1] : propParts[0];
+        var propShort;
+        if (propParts.length >= 3) {
+          // "Killington - 5983 US Rt. 4 - Jaclyn Vecchione" => "Killington - 5983 US Rt. 4"
+          propShort = propParts.slice(0, -1).join(' - ');
+        } else if (propParts.length === 2) {
+          // "Rutland - 122 Oak St, Kayla" => keep full "Rutland - 122 Oak St, Kayla"
+          // Unless second part looks like just an owner name (no numbers/commas)
+          propShort = propParts[0] + ' - ' + propParts[1];
+        } else {
+          propShort = j.property_name;
+        }
         var st = (j.bw_status || 'Unknown').toLowerCase();
         var statusBadge = st === 'finished' || st === 'closed' || st === 'completed' 
           ? '<span class="badge completed">Finished</span>' 
@@ -513,13 +524,15 @@
           ownerPayment = '<button onclick="toggleOwnerPaid(\'' + j.id + '\', true)" style="background:rgba(245,158,11,0.15);color:var(--warn);border:1px solid var(--warn);padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">Open</button>';
         }
         
-        // Cleaner info
+        // Cleaner info - Joe Anderson is hourly, not flat rate
         var cleanerName = j.cleaner_name || '-';
-        var cleanerRate = j.cleaner_rate > 0 ? '$' + j.cleaner_rate.toFixed(0) : '-';
+        var cleanerNorm = (j.cleaner_name || '').toLowerCase().replace(/\s+/g, ' ').trim();
+        var isHourly = cleanerNorm === 'joe anderson';
+        var cleanerRate = isHourly ? '<span style="color:var(--text2);font-style:italic">Hourly</span>' : (j.cleaner_rate > 0 ? '$' + j.cleaner_rate.toFixed(0) : '-');
         
-        // Cleaner payment
+        // Cleaner payment - show Paid/Unpaid button for hourly cleaners too
         var cleanerPayment;
-        if (!j.cleaner_rate || j.cleaner_rate === 0) {
+        if (!isHourly && (!j.cleaner_rate || j.cleaner_rate === 0)) {
           cleanerPayment = '<span style="color:var(--text2)">N/A</span>';
         } else if (j.cleaner_paid_at) {
           cleanerPayment = '<button onclick="toggleCleanerPaid(\'' + j.id + '\', false)" style="background:var(--accent);color:#000;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">✅ Paid</button>';
