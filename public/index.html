@@ -81,6 +81,7 @@
     <div class="tabs">
       <div class="tab active" id="tab-today" onclick="switchTab('today')">Today <span class="count" id="count-today">—</span></div>
       <div class="tab" id="tab-tomorrow" onclick="switchTab('tomorrow')">Tomorrow <span class="count" id="count-tomorrow">—</span></div>
+      <div class="tab" id="tab-dayafter" onclick="switchTab('dayafter')">Day After <span class="count" id="count-dayafter">—</span></div>
       <div class="tab" id="tab-payments" onclick="switchTab('payments')">Payments 💰</div>
     </div>
     <div class="section-header">
@@ -150,14 +151,17 @@
 
     var todayDate = getLocalDate(0);
     var tomorrowDate = getLocalDate(1);
+    var dayAfterDate = getLocalDate(2);
     var currentTab = 'today';
     var todayJobs = [];
     var tomorrowJobs = [];
+    var dayAfterJobs = [];
 
     function switchTab(tab) {
       currentTab = tab;
       document.getElementById('tab-today').className = tab === 'today' ? 'tab active' : 'tab';
       document.getElementById('tab-tomorrow').className = tab === 'tomorrow' ? 'tab active' : 'tab';
+      document.getElementById('tab-dayafter').className = tab === 'dayafter' ? 'tab active' : 'tab';
       document.getElementById('tab-payments').className = tab === 'payments' ? 'tab active' : 'tab';
       
       // Show/hide sections
@@ -169,12 +173,15 @@
         loadPayments();
         return;
       }
-      document.getElementById('schedule-title').textContent = tab === 'today' ? "Today's Schedule" : "Tomorrow's Schedule";
-      document.getElementById('display-date').textContent = formatDate(tab === 'today' ? todayDate : tomorrowDate);
-      document.getElementById('send-btn').style.display = tab === 'tomorrow' ? 'inline-flex' : 'none';
-      document.getElementById('owner-btn').style.display = tab === 'tomorrow' ? 'inline-flex' : 'none';
-      // Show close-out button on Today tab if there are finished jobs without close-out emails
-      var activeJobs = tab === 'today' ? todayJobs : tomorrowJobs;
+      var isFuture = (tab === 'tomorrow' || tab === 'dayafter');
+      var schedDate = tab === 'today' ? todayDate : tab === 'tomorrow' ? tomorrowDate : dayAfterDate;
+      var schedTitle = tab === 'today' ? "Today's Schedule" : tab === 'tomorrow' ? "Tomorrow's Schedule" : "Day After Tomorrow";
+      document.getElementById('schedule-title').textContent = schedTitle;
+      document.getElementById('display-date').textContent = formatDate(schedDate);
+      document.getElementById('send-btn').style.display = isFuture ? 'inline-flex' : 'none';
+      document.getElementById('owner-btn').style.display = isFuture ? 'inline-flex' : 'none';
+      // Show close-out button if there are finished jobs without close-out emails
+      var activeJobs = tab === 'today' ? todayJobs : tab === 'tomorrow' ? tomorrowJobs : dayAfterJobs;
       var pendingCloseouts = activeJobs.filter(function(j) {
         var s = (j.bw_status || '').toLowerCase();
         return (s === 'finished' || s === 'closed' || s === 'completed') && !j.closeout_email_sent_at;
@@ -191,9 +198,10 @@
       } else {
         cbtn.style.display = 'none';
       }
-      // Update send button text based on whether schedule was already sent
-      if (tab === 'tomorrow' && tomorrowJobs.length) {
-        var assignedJobs = tomorrowJobs.filter(function(j){return j.cleaner_name});
+      // Update send/owner buttons for future tabs
+      if (isFuture) {
+        var futureJobs = tab === 'tomorrow' ? tomorrowJobs : dayAfterJobs;
+        var assignedJobs = futureJobs.filter(function(j){return j.cleaner_name});
         var allSent = assignedJobs.length && assignedJobs.every(function(j){return j.schedule_sent_at});
         var allConfirmed = assignedJobs.length && assignedJobs.every(function(j){return j.confirmed_at});
         var btn = document.getElementById('send-btn');
@@ -209,21 +217,21 @@
         }
         // Update owner button
         var obtn = document.getElementById('owner-btn');
-        var notifiedCount = tomorrowJobs.filter(function(j){return j.owner_notified_at}).length;
-        var allOwnerNotified = notifiedCount === tomorrowJobs.length;
-        var allOwnerConfirmed = tomorrowJobs.every(function(j){return j.owner_confirmed_at});
-        var pendingOwners = tomorrowJobs.length - notifiedCount;
+        var notifiedCount = futureJobs.filter(function(j){return j.owner_notified_at}).length;
+        var allOwnerNotified = futureJobs.length && notifiedCount === futureJobs.length;
+        var allOwnerConfirmed = futureJobs.length && futureJobs.every(function(j){return j.owner_confirmed_at});
+        var pendingOwners = futureJobs.length - notifiedCount;
         if (allOwnerConfirmed) {
           obtn.textContent = '✅ Owners Confirmed';
           obtn.style.background = 'var(--accent)'; obtn.style.color = '#000';
         } else if (allOwnerNotified) {
-          obtn.textContent = '✅ Owners Notified (' + notifiedCount + '/' + tomorrowJobs.length + ')';
+          obtn.textContent = '✅ Owners Notified (' + notifiedCount + '/' + futureJobs.length + ')';
           obtn.style.background = 'var(--accent)'; obtn.style.color = '#000';
         } else if (notifiedCount > 0) {
           obtn.textContent = '📧 Notify Remaining (' + pendingOwners + ')';
           obtn.style.background = 'var(--warn)'; obtn.style.color = '#000';
         } else {
-          obtn.textContent = '📧 Notify Owners (' + tomorrowJobs.length + ')';
+          obtn.textContent = '📧 Notify Owners (' + futureJobs.length + ')';
           obtn.style.background = 'var(--warn)'; obtn.style.color = '#000';
         }
       }
@@ -231,10 +239,10 @@
     }
 
     function renderJobs() {
-      var jobs = currentTab === 'today' ? todayJobs : tomorrowJobs;
+      var jobs = currentTab === 'today' ? todayJobs : currentTab === 'tomorrow' ? tomorrowJobs : dayAfterJobs;
       var el = document.getElementById('jobs');
       if (!jobs.length) {
-        var label = currentTab === 'today' ? 'today' : 'tomorrow';
+        var label = currentTab === 'today' ? 'today' : currentTab === 'tomorrow' ? 'tomorrow' : 'the day after tomorrow';
         el.innerHTML = '<div class="empty"><div class="icon">📋</div><p>No jobs scheduled for ' + label + '.<br>Click "Sync Breezeway" to pull tasks.</p></div>';
         return;
       }
@@ -287,10 +295,12 @@
       try {
         var results = await Promise.all([
           fetch('/api/jobs?date=' + todayDate).then(function(r){return r.json()}),
-          fetch('/api/jobs?date=' + tomorrowDate).then(function(r){return r.json()})
+          fetch('/api/jobs?date=' + tomorrowDate).then(function(r){return r.json()}),
+          fetch('/api/jobs?date=' + dayAfterDate).then(function(r){return r.json()})
         ]);
         todayJobs = results[0];
         tomorrowJobs = results[1];
+        dayAfterJobs = results[2];
         var cleaners = [];
         todayJobs.forEach(function(j){ if(j.cleaner_name && cleaners.indexOf(j.cleaner_name)===-1) cleaners.push(j.cleaner_name); });
         var done = todayJobs.filter(function(j){ var s=(j.bw_status||'').toLowerCase(); return s==='completed'||s==='finished'||s==='closed'; }).length;
@@ -299,6 +309,7 @@
         document.getElementById('s-cleaners').textContent = cleaners.length;
         document.getElementById('count-today').textContent = todayJobs.length;
         document.getElementById('count-tomorrow').textContent = tomorrowJobs.length;
+        document.getElementById('count-dayafter').textContent = dayAfterJobs.length;
         try { var p = await (await fetch('/api/properties/count')).json(); document.getElementById('s-props').textContent = p.count || '--'; } catch(e){}
         renderJobs();
         // Refresh button states
@@ -325,9 +336,10 @@
         await fetch('/api/sync/properties', {method:'POST'});
         var results = await Promise.all([
           fetch('/api/sync/tasks', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:todayDate})}).then(function(r){return r.json()}),
-          fetch('/api/sync/tasks', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:tomorrowDate})}).then(function(r){return r.json()})
+          fetch('/api/sync/tasks', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:tomorrowDate})}).then(function(r){return r.json()}),
+          fetch('/api/sync/tasks', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:dayAfterDate})}).then(function(r){return r.json()})
         ]);
-        btn.textContent = 'Synced ' + results[0].count + ' today + ' + results[1].count + ' tomorrow!';
+        btn.textContent = 'Synced: ' + results[0].count + '/' + results[1].count + '/' + results[2].count;
         setTimeout(function(){ btn.textContent = 'Sync Breezeway'; btn.disabled = false; }, 3000);
         loadAllJobs();
       } catch(e) {
@@ -337,18 +349,21 @@
     }
 
     async function sendSchedule() {
-      if (!tomorrowJobs.length) { alert('No jobs scheduled for tomorrow. Sync first.'); return; }
-      var assignedJobs = tomorrowJobs.filter(function(j){return j.cleaner_name});
+      var activeDate = currentTab === 'dayafter' ? dayAfterDate : tomorrowDate;
+      var activeJobs = currentTab === 'dayafter' ? dayAfterJobs : tomorrowJobs;
+      var label = currentTab === 'dayafter' ? 'day after tomorrow' : 'tomorrow';
+      if (!activeJobs.length) { alert('No jobs scheduled for ' + label + '. Sync first.'); return; }
+      var assignedJobs = activeJobs.filter(function(j){return j.cleaner_name});
       var alreadySent = assignedJobs.every(function(j){return j.schedule_sent_at});
       if (alreadySent) {
         if (!confirm('Schedule was already sent to all cleaners. Send again anyway?')) return;
       }
       var cleanerList = [];
-      tomorrowJobs.forEach(function(j){ if(j.cleaner_name && cleanerList.indexOf(j.cleaner_name)===-1) cleanerList.push(j.cleaner_name); });
+      activeJobs.forEach(function(j){ if(j.cleaner_name && cleanerList.indexOf(j.cleaner_name)===-1) cleanerList.push(j.cleaner_name); });
       if (!alreadySent) {
-        var msg = 'Send tomorrow\'s schedule via SMS to ' + cleanerList.length + ' cleaner(s)?\n\n';
+        var msg = 'Send ' + label + '\'s schedule via SMS to ' + cleanerList.length + ' cleaner(s)?\n\n';
         cleanerList.forEach(function(c) {
-          var count = tomorrowJobs.filter(function(j){return j.cleaner_name===c}).length;
+          var count = activeJobs.filter(function(j){return j.cleaner_name===c}).length;
           msg += '• ' + c + ' (' + count + ' job' + (count>1?'s':'') + ')\n';
         });
         if (!confirm(msg)) return;
@@ -356,7 +371,7 @@
       var btn = document.getElementById('send-btn');
       btn.disabled = true; btn.textContent = 'Sending...';
       try {
-        var r = await fetch('/api/send-schedule', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:tomorrowDate})});
+        var r = await fetch('/api/send-schedule', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:activeDate})});
         var data = await r.json();
         if (data.error) { btn.textContent = 'Error: ' + data.error; btn.disabled = false; }
         else {
@@ -370,8 +385,11 @@
     }
 
     async function notifyOwners() {
-      if (!tomorrowJobs.length) { alert('No jobs scheduled for tomorrow. Sync first.'); return; }
-      var pendingJobs = tomorrowJobs.filter(function(j){return !j.owner_notified_at});
+      var activeDate = currentTab === 'dayafter' ? dayAfterDate : tomorrowDate;
+      var activeJobs = currentTab === 'dayafter' ? dayAfterJobs : tomorrowJobs;
+      var label = currentTab === 'dayafter' ? 'day after tomorrow' : 'tomorrow';
+      if (!activeJobs.length) { alert('No jobs scheduled for ' + label + '. Sync first.'); return; }
+      var pendingJobs = activeJobs.filter(function(j){return !j.owner_notified_at});
       if (!pendingJobs.length) {
         if (!confirm('All owners have already been notified. Send again anyway?')) return;
       } else {
@@ -382,7 +400,7 @@
       var btn = document.getElementById('owner-btn');
       btn.disabled = true; btn.textContent = 'Sending...';
       try {
-        var r = await fetch('/api/send-owner-notifications', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:tomorrowDate})});
+        var r = await fetch('/api/send-owner-notifications', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:activeDate})});
         var data = await r.json();
         if (data.error) { btn.textContent = 'Error: ' + data.error; btn.disabled = false; }
         else {
@@ -396,8 +414,8 @@
     }
 
     async function sendCloseouts() {
-      var date = currentTab === 'today' ? todayDate : tomorrowDate;
-      var jobs = currentTab === 'today' ? todayJobs : tomorrowJobs;
+      var date = currentTab === 'today' ? todayDate : currentTab === 'tomorrow' ? tomorrowDate : dayAfterDate;
+      var jobs = currentTab === 'today' ? todayJobs : currentTab === 'tomorrow' ? tomorrowJobs : dayAfterJobs;
       var finishedJobs = jobs.filter(function(j) {
         var s = (j.bw_status || '').toLowerCase();
         return (s === 'finished' || s === 'closed' || s === 'completed') && !j.closeout_email_sent_at;
