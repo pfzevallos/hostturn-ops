@@ -124,6 +124,7 @@
               <th style="padding:10px;border-bottom:1px solid var(--border);">Date</th>
               <th style="padding:10px;border-bottom:1px solid var(--border);">Property</th>
               <th style="padding:10px;border-bottom:1px solid var(--border);">Status</th>
+              <th style="padding:10px;border-bottom:1px solid var(--border);">Report</th>
               <th style="padding:10px;border-bottom:1px solid var(--border);">Owner Rate</th>
               <th style="padding:10px;border-bottom:1px solid var(--border);">Invoice</th>
               <th style="padding:10px;border-bottom:1px solid var(--border);">Owner Payment</th>
@@ -449,13 +450,13 @@
     // Payment tracker
     var paymentData = { jobs: [], summary: {} };
     
-    // Set default date range (start of current month to today)
-    var startOfMonth = todayDate.substring(0, 8) + '01';
-    document.getElementById('p-start').value = startOfMonth;
+    // Set default date range (past 30 days to today)
+    var thirtyDaysAgo = getLocalDate(-30);
+    document.getElementById('p-start').value = thirtyDaysAgo;
     document.getElementById('p-end').value = todayDate;
     
     async function loadPayments() {
-      var start = document.getElementById('p-start').value || startOfMonth;
+      var start = document.getElementById('p-start').value || thirtyDaysAgo;
       var end = document.getElementById('p-end').value || todayDate;
       try {
         var r = await fetch('/api/payment-tracker?start=' + start + '&end=' + end);
@@ -468,7 +469,7 @@
         document.getElementById('p-cleaner-owed').textContent = '$' + (s.totalCleanerOwed || 0).toLocaleString();
         renderPayments();
       } catch(e) {
-        document.getElementById('payments-body').innerHTML = '<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--text2)">Error loading data: ' + e.message + '</td></tr>';
+        document.getElementById('payments-body').innerHTML = '<tr><td colspan="10" style="padding:20px;text-align:center;color:var(--text2)">Error loading data: ' + e.message + '</td></tr>';
       }
     }
     
@@ -483,7 +484,7 @@
       });
       
       if (!jobs.length) {
-        document.getElementById('payments-body').innerHTML = '<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--text2)">No jobs match this filter.</td></tr>';
+        document.getElementById('payments-body').innerHTML = '<tr><td colspan="10" style="padding:20px;text-align:center;color:var(--text2)">No jobs match this filter.</td></tr>';
         return;
       }
       
@@ -526,11 +527,17 @@
           cleanerPayment = '<button onclick="toggleCleanerPaid(\'' + j.id + '\', true)" style="background:rgba(239,68,68,0.15);color:var(--danger);border:1px solid var(--danger);padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">Unpaid</button>';
         }
         
+        // Report link
+        var reportLink = j.bw_report_url 
+          ? '<a href="' + j.bw_report_url + '" target="_blank" style="color:var(--blue);text-decoration:none;font-size:11px;">📋 View</a>' 
+          : '<span style="color:var(--text2);font-size:11px;">—</span>';
+        
         var rowStyle = 'border-bottom:1px solid var(--border);';
         return '<tr style="' + rowStyle + '">' +
           '<td style="padding:10px;">' + dateStr + '</td>' +
           '<td style="padding:10px;font-weight:500;">' + propShort + '</td>' +
           '<td style="padding:10px;">' + statusBadge + '</td>' +
+          '<td style="padding:10px;">' + reportLink + '</td>' +
           '<td style="padding:10px;font-family:JetBrains Mono,monospace;font-weight:600;">' + ownerRate + '</td>' +
           '<td style="padding:10px;">' + invoiceStatus + '</td>' +
           '<td style="padding:10px;">' + ownerPayment + '</td>' +
