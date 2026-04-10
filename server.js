@@ -261,7 +261,7 @@ app.get("/api/payment-tracker", (req, res) => {
   const finished = jobs.filter(j => {
     const isFinished = ['finished','closed','completed'].includes((j.bw_status||'').toLowerCase());
     const cleanerNorm = (j.cleaner_name||'').toLowerCase().replace(/\s+/g, ' ').trim();
-    const isAdmin = ADMIN_NAMES.includes(cleanerNorm);
+    const isAdmin = ADMIN_NAMES.some(a => cleanerNorm.includes(a));
     return isFinished && !isAdmin;
   });
   const totalOwnerRevenue = finished.reduce((s,j) => s + (j.rate || 0), 0);
