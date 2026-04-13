@@ -144,17 +144,25 @@ async function syncTasksForDate(date) {
   console.log(`[BW] Task sync: checked ${checkedCount} props, ${errorCount} errors, found ${allTasks.length} tasks for ${date}`);
 
   // Remove stale jobs that no longer exist in Breezeway for this date
-  // IMPORTANT: Breezeway task IDs may be stored as floats (e.g. "137831817.0") 
-  // but come from API as integers. Normalize both for comparison.
+  // IMPORTANT: Never delete jobs that have been finished, invoiced, or have payment data
   const bwTaskIds = allTasks.map(t => String(parseInt(t.id, 10)));
-  const existingJobs = db.prepare("SELECT id, bw_task_id FROM jobs WHERE date = ?").all(date);
+  const existingJobs = db.prepare("SELECT * FROM jobs WHERE date = ?").all(date);
   for (const ej of existingJobs) {
     if (ej.bw_task_id) {
       const normalizedId = String(parseInt(ej.bw_task_id, 10));
       if (!bwTaskIds.includes(normalizedId)) {
-        db.prepare("DELETE FROM job_steps WHERE job_id = ?").run(ej.id);
-        db.prepare("DELETE FROM jobs WHERE id = ?").run(ej.id);
-        console.log(`[BW] Removed stale job ${ej.id} (task ${ej.bw_task_id}) for ${date}`);
+        // Check if this job has meaningful data we should preserve
+        const isFinished = ['finished','closed','completed'].includes((ej.bw_status||'').toLowerCase());
+        const hasPaymentData = ej.owner_paid_at || ej.cleaner_paid_at || ej.closeout_email_sent_at || ej.owner_notified_at;
+        const hasStarted = ej.bw_started_at || ej.bw_completed_at;
+        
+        if (isFinished || hasPaymentData || hasStarted) {
+          console.log(`[BW] Keeping finished/paid job ${ej.id} (task ${ej.bw_task_id}) for ${date} - not deleting`);
+        } else {
+          db.prepare("DELETE FROM job_steps WHERE job_id = ?").run(ej.id);
+          db.prepare("DELETE FROM jobs WHERE id = ?").run(ej.id);
+          console.log(`[BW] Removed stale job ${ej.id} (task ${ej.bw_task_id}) for ${date}`);
+        }
       }
     }
   }
@@ -174,19 +182,25 @@ async function syncTasksForDate(date) {
         .get(String(t.id), String(t.id) + ".0", String(parseInt(t.id, 10)));
       const id = existing ? existing.id : "j" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
       const propDb = db.prepare("SELECT * FROM properties WHERE id = ?").get(t._prop.id);
-      let cleaner = t.assignments?.[0]?.name || t.assignees?.[0]?.full_name || existing?.cleaner_name || "";
-      // Skip admin-assigned tasks — Pedro and Lizzy are company owners, not cleaners
-      // These tasks should not appear on the Ops board at all
+      let cleaner = "";
+      // Filter out admin accounts — Pedro and Lizzy are company owners, not cleaners
+      // Look through ALL assignments to find a real cleaner (not admin)
       const ADMIN_NAMES = ["pedro zevallos", "lizzy zevallos"];
-      const cleanerNorm = (cleaner || "").toLowerCase().replace(/\s+/g, ' ').trim();
-      if (ADMIN_NAMES.some(a => cleanerNorm.includes(a))) {
-        // Delete any existing job for this admin task
-        if (existing) {
-          db.prepare("DELETE FROM job_steps WHERE job_id = ?").run(existing.id);
-          db.prepare("DELETE FROM jobs WHERE id = ?").run(existing.id);
-          console.log(`[BW] Removed admin task: ${cleaner} at ${t._prop.name}`);
+      const allAssignments = t.assignments || t.assignees || [];
+      for (const a of allAssignments) {
+        const aName = (a.name || a.full_name || "").replace(/\s+/g, ' ').trim();
+        const aNameLower = aName.toLowerCase();
+        if (aName && !ADMIN_NAMES.some(admin => aNameLower.includes(admin))) {
+          cleaner = aName;
+          break;
         }
-        continue; // Skip this task entirely
+      }
+      // Fall back to existing cleaner name if no non-admin assignment found
+      if (!cleaner) {
+        const existingName = (existing?.cleaner_name || "").toLowerCase().replace(/\s+/g, ' ').trim();
+        if (existingName && !ADMIN_NAMES.some(admin => existingName.includes(admin))) {
+          cleaner = existing.cleaner_name;
+        }
       }
       const typeStatus = typeof t.type_task_status === 'string' ? JSON.parse(t.type_task_status || '{}') : (t.type_task_status || {});
       const status = typeStatus.name || typeStatus.code || t.status?.name || t.status?.code || "";
