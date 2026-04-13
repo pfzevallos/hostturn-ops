@@ -178,8 +178,11 @@ async function syncTasksForDate(date) {
 
   const insertMany = db.transaction(() => {
     for (const t of allTasks) {
-      const existing = db.prepare("SELECT * FROM jobs WHERE bw_task_id = ? OR bw_task_id = ? OR bw_task_id = ?")
-        .get(String(t.id), String(t.id) + ".0", String(parseInt(t.id, 10)));
+      const taskIdStr = String(t.id);
+      const taskIdInt = String(parseInt(t.id, 10));
+      const taskIdFloat = taskIdInt + ".0";
+      const existing = db.prepare("SELECT * FROM jobs WHERE date = ? AND (bw_task_id = ? OR bw_task_id = ? OR bw_task_id = ?)")
+        .get(date, taskIdStr, taskIdFloat, taskIdInt);
       const id = existing ? existing.id : "j" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
       const propDb = db.prepare("SELECT * FROM properties WHERE id = ?").get(t._prop.id);
       let cleaner = "";
@@ -283,7 +286,7 @@ async function syncTasksForDate(date) {
       if (!rate) rate = propDb?.rate || 0;
 
       upsert.run(
-        id, date, t.id, t._prop.id, t._prop.name || "", t._prop.group_name || "",
+        id, date, String(parseInt(t.id, 10)), String(Math.round(t._prop.id)), t._prop.name || "", t._prop.group_name || "",
         cleaner, t.start_time || "", expectedArrival, rate, desc, status,
         startedAt, completedAt, isCheckout,
         // ON CONFLICT updates:
