@@ -173,7 +173,7 @@ async function syncTasksForDate(date) {
       checkout_time, expected_arrival, rate, task_notes, bw_status, bw_started_at, bw_completed_at, is_checkout_day, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
     ON CONFLICT(id) DO UPDATE SET
-      bw_status=?, bw_started_at=?, bw_completed_at=?, task_notes=?, cleaner_name=?, updated_at=datetime('now')
+      bw_status=?, bw_started_at=?, bw_completed_at=?, task_notes=?, cleaner_name=?, rate=?, updated_at=datetime('now')
   `);
 
   const insertMany = db.transaction(() => {
@@ -291,7 +291,7 @@ async function syncTasksForDate(date) {
         cleaner, t.start_time || "", expectedArrival, rate, desc, status,
         startedAt, completedAt, isCheckout,
         // ON CONFLICT updates:
-        status, startedAt, completedAt, desc, cleaner
+        status, startedAt, completedAt, desc, cleaner, rate
       );
       
       // Save report_url and task name separately (not in upsert to keep it simple)
