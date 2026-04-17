@@ -198,6 +198,29 @@ function initTables() {
   try { db.exec("ALTER TABLE jobs ADD COLUMN arrival_confirmed_at TEXT"); } catch(e) {}
   try { db.exec("ALTER TABLE jobs ADD COLUMN report_verified_at TEXT"); } catch(e) {}
   try { db.exec("ALTER TABLE contacts ADD COLUMN cc_email TEXT"); } catch(e) {}
+
+  // Prospects table for Rate Calculator
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS prospects (
+      id TEXT PRIMARY KEY,
+      property_name TEXT NOT NULL,
+      total_sf REAL DEFAULT 0,
+      full_baths INTEGER DEFAULT 0,
+      half_baths INTEGER DEFAULT 0,
+      bedrooms INTEGER DEFAULT 0,
+      beds INTEGER DEFAULT 0,
+      linen_delivery INTEGER DEFAULT 0,
+      pets_allowed INTEGER DEFAULT 0,
+      adjustments REAL DEFAULT 0,
+      calculated_rate REAL DEFAULT 0,
+      deep_clean_rate REAL DEFAULT 0,
+      proposed_rate REAL DEFAULT 0,
+      status TEXT DEFAULT 'prospect',
+      notes TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
 }
 
 module.exports = { getDb };
