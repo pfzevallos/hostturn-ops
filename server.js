@@ -244,6 +244,22 @@ app.post("/api/payments/:jobId/undo-cleaner-paid", (req, res) => {
   res.json({ ok: true });
 });
 
+// Update job rate manually
+app.post("/api/jobs/:jobId/set-rate", (req, res) => {
+  const db = getDb();
+  const rate = parseFloat(req.body.rate) || 0;
+  db.prepare("UPDATE jobs SET rate = ? WHERE id = ?").run(rate, req.params.jobId);
+  res.json({ ok: true, rate });
+});
+
+// Update job cleaner_rate manually
+app.post("/api/jobs/:jobId/set-cleaner-rate", (req, res) => {
+  const db = getDb();
+  const rate = parseFloat(req.body.rate) || 0;
+  db.prepare("UPDATE jobs SET cleaner_rate = ? WHERE id = ?").run(rate, req.params.jobId);
+  res.json({ ok: true, rate });
+});
+
 // Get payment tracker data (all finished jobs with payment status)
 app.get("/api/payment-tracker", (req, res) => {
   const db = getDb();
