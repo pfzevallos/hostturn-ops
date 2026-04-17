@@ -890,6 +890,66 @@ cron.schedule("0 18 * * *", async () => {
 });
 
 // ═══════════════════════════════════════════════════════
+// RATE CALCULATOR & PROSPECTS
+// ═══════════════════════════════════════════════════════
+
+// Get all prospects
+app.get("/api/prospects", (req, res) => {
+  const db = getDb();
+  const prospects = db.prepare("SELECT * FROM prospects ORDER BY created_at DESC").all();
+  res.json(prospects);
+});
+
+// Get single prospect
+app.get("/api/prospects/:id", (req, res) => {
+  const db = getDb();
+  const prospect = db.prepare("SELECT * FROM prospects WHERE id = ?").get(req.params.id);
+  if (!prospect) return res.status(404).json({ error: "Not found" });
+  res.json(prospect);
+});
+
+// Create/update prospect
+app.post("/api/prospects", (req, res) => {
+  const db = getDb();
+  const p = req.body;
+  const id = p.id || "pr" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  
+  db.prepare(`
+    INSERT INTO prospects (id, property_name, total_sf, full_baths, half_baths, bedrooms, beds,
+      linen_delivery, pets_allowed, adjustments, calculated_rate, deep_clean_rate, proposed_rate, status, notes, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(id) DO UPDATE SET
+      property_name=?, total_sf=?, full_baths=?, half_baths=?, bedrooms=?, beds=?,
+      linen_delivery=?, pets_allowed=?, adjustments=?, calculated_rate=?, deep_clean_rate=?,
+      proposed_rate=?, status=?, notes=?, updated_at=datetime('now')
+  `).run(
+    id, p.property_name, p.total_sf||0, p.full_baths||0, p.half_baths||0, p.bedrooms||0, p.beds||0,
+    p.linen_delivery||0, p.pets_allowed||0, p.adjustments||0, p.calculated_rate||0, p.deep_clean_rate||0,
+    p.proposed_rate||0, p.status||'prospect', p.notes||'',
+    // ON CONFLICT updates:
+    p.property_name, p.total_sf||0, p.full_baths||0, p.half_baths||0, p.bedrooms||0, p.beds||0,
+    p.linen_delivery||0, p.pets_allowed||0, p.adjustments||0, p.calculated_rate||0, p.deep_clean_rate||0,
+    p.proposed_rate||0, p.status||'prospect', p.notes||''
+  );
+  res.json({ id });
+});
+
+// Update prospect status (won/lost)
+app.post("/api/prospects/:id/status", (req, res) => {
+  const db = getDb();
+  db.prepare("UPDATE prospects SET status = ?, updated_at = datetime('now') WHERE id = ?")
+    .run(req.body.status, req.params.id);
+  res.json({ ok: true });
+});
+
+// Delete prospect
+app.delete("/api/prospects/:id", (req, res) => {
+  const db = getDb();
+  db.prepare("DELETE FROM prospects WHERE id = ?").run(req.params.id);
+  res.json({ ok: true });
+});
+
+// ═══════════════════════════════════════════════════════
 // START
 // ═══════════════════════════════════════════════════════
 
