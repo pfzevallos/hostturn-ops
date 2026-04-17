@@ -427,7 +427,7 @@ app.post("/api/send-schedule", async (req, res) => {
       const dateStr = new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
       
       // Get first name (use nickname if available)
-      const nicknames = { "Byron Ramos": "David", "Magiber Duche": "Magiber" };
+      const nicknames = { "Byron Ramos": "David", "Magiber Duche": "Magiber", "Carlos Beb xol's Company": "Carlos" };
       const firstName = nicknames[cleanerName] || cleanerName.split(" ")[0];
       
       // Time-appropriate greeting
@@ -455,6 +455,23 @@ app.post("/api/send-schedule", async (req, res) => {
       
       try {
         await sms.sendSMS(contact.phone, msg, null, "cleaner_sched", contact.lang || "en");
+        
+        // Send to secondary contacts (e.g., Ines gets Carlos's schedule too)
+        const SECONDARY_CONTACTS = {
+          "carlos beb": "+18454077055"  // Ines (Carlos's wife)
+        };
+        const cleanerLower = cleanerName.toLowerCase().replace(/\s+/g, ' ').trim();
+        for (const [key, secondaryPhone] of Object.entries(SECONDARY_CONTACTS)) {
+          if (cleanerLower.includes(key)) {
+            try {
+              await sms.sendSMS(secondaryPhone, msg, null, "cleaner_sched", contact.lang || "en");
+              console.log(`[SCHEDULE] Also sent to secondary contact ${secondaryPhone} for ${cleanerName}`);
+            } catch (e2) {
+              console.error(`[SCHEDULE] Failed to send to secondary ${secondaryPhone}:`, e2.message);
+            }
+          }
+        }
+        
         // Mark all jobs for this cleaner as schedule sent
         for (const j of cleanerJobs) {
           db.prepare("UPDATE jobs SET schedule_sent_at = datetime('now') WHERE id = ?").run(j.id);
