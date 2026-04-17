@@ -273,18 +273,17 @@ async function syncTasksForDate(date) {
         "craryville, 30 golf course": 335,
       };
       
-      // Look up rate by matching property name
-      let rate = existing?.rate || 0;
-      if (!rate) {
-        const propNameLower = (t._prop.name || "").toLowerCase();
-        for (const [key, val] of Object.entries(RATE_TABLE)) {
-          if (propNameLower.includes(key)) {
-            rate = val;
-            break;
-          }
+      // Look up rate by matching property name - ALWAYS check table to pick up changes
+      let rate = 0;
+      const propNameLower = (t._prop.name || "").toLowerCase();
+      for (const [key, val] of Object.entries(RATE_TABLE)) {
+        if (propNameLower.includes(key)) {
+          rate = val;
+          break;
         }
       }
-      if (!rate) rate = propDb?.rate || 0;
+      // Fall back to existing rate or property DB rate
+      if (!rate) rate = existing?.rate || propDb?.rate || 0;
 
       upsert.run(
         id, date, String(parseInt(t.id, 10)), String(Math.round(t._prop.id)), t._prop.name || "", t._prop.group_name || "",
