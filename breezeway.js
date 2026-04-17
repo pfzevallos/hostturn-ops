@@ -270,6 +270,7 @@ async function syncTasksForDate(date) {
         "wilmington, 84 mowing": 210,
         "wilmington, 43 winter haven": 210,
         "wilmington, 87 elwell heights": 210,
+        "craryville, 30 golf course": 335,
       };
       
       // Look up rate by matching property name
