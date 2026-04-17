@@ -83,6 +83,7 @@
       <div class="tab" id="tab-tomorrow" onclick="switchTab('tomorrow')">Tomorrow <span class="count" id="count-tomorrow">—</span></div>
       <div class="tab" id="tab-dayafter" onclick="switchTab('dayafter')">Day After <span class="count" id="count-dayafter">—</span></div>
       <div class="tab" id="tab-payments" onclick="switchTab('payments')">Payments 💰</div>
+      <div class="tab" id="tab-calculator" onclick="switchTab('calculator')">Rate Calculator 🧮</div>
     </div>
     <div class="section-header">
       <h2 id="schedule-title">Today's Schedule</h2>
@@ -138,6 +139,137 @@
         </table>
       </div>
     </div>
+    <!-- Rate Calculator Section -->
+    <div id="calculator-section" style="display:none">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px;">
+        <!-- Calculator Form -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;">
+          <h3 style="margin:0 0 16px 0;font-size:16px;">🧮 Rate Calculator</h3>
+          <div style="margin-bottom:12px;">
+            <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Property Name / Address</label>
+            <input type="text" id="calc-name" placeholder="Enter property name" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Total Sq Ft</label>
+              <input type="number" id="calc-sf" value="0" min="0" oninput="calcRate()" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Full Bathrooms</label>
+              <input type="number" id="calc-fullbaths" value="0" min="0" oninput="calcRate()" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Half Bathrooms</label>
+              <input type="number" id="calc-halfbaths" value="0" min="0" oninput="calcRate()" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Bedrooms</label>
+              <input type="number" id="calc-bedrooms" value="0" min="0" oninput="calcRate()" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;"># of Beds</label>
+              <input type="number" id="calc-beds" value="0" min="0" oninput="calcRate()" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Adjustments ($)</label>
+              <input type="number" id="calc-adjust" value="0" oninput="calcRate()" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+            </div>
+          </div>
+          <div style="display:flex;gap:16px;margin-top:12px;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text);cursor:pointer;">
+              <input type="checkbox" id="calc-linen" onchange="calcRate()" style="width:16px;height:16px;"> Linen Delivery (15% discount)
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text);cursor:pointer;">
+              <input type="checkbox" id="calc-pets" onchange="calcRate()" style="width:16px;height:16px;"> Pets Allowed (5% increase)
+            </label>
+          </div>
+          <div style="margin-top:12px;">
+            <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Proposed Rate (optional — enter if different from calculated)</label>
+            <input type="number" id="calc-proposed" value="0" min="0" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+          </div>
+          <div style="margin-top:12px;">
+            <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Notes</label>
+            <textarea id="calc-notes" rows="2" placeholder="Optional notes..." style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:13px;resize:vertical;font-family:inherit;"></textarea>
+          </div>
+          <button class="btn" onclick="saveProspect()" style="margin-top:16px;width:100%;padding:10px;font-size:14px;">💾 Save Prospect</button>
+          <input type="hidden" id="calc-edit-id" value="">
+        </div>
+        <!-- Calculation Breakdown -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;">
+          <h3 style="margin:0 0 16px 0;font-size:16px;">📊 Rate Breakdown</h3>
+          <table style="width:100%;border-collapse:collapse;font-size:14px;" id="calc-breakdown">
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:10px;color:var(--text2);">Base (first 1500 SF)</td>
+              <td style="padding:10px;text-align:right;font-family:JetBrains Mono,monospace;" id="cb-base">$75.00</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:10px;color:var(--text2);">Additional SF <span id="cb-sf-note" style="font-size:11px;"></span></td>
+              <td style="padding:10px;text-align:right;font-family:JetBrains Mono,monospace;" id="cb-sf">$0.00</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:10px;color:var(--text2);">Full Bathrooms <span id="cb-fb-note" style="font-size:11px;"></span></td>
+              <td style="padding:10px;text-align:right;font-family:JetBrains Mono,monospace;" id="cb-fb">$0.00</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:10px;color:var(--text2);">Half Bathrooms <span id="cb-hb-note" style="font-size:11px;"></span></td>
+              <td style="padding:10px;text-align:right;font-family:JetBrains Mono,monospace;" id="cb-hb">$0.00</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:10px;color:var(--text2);">Bedrooms <span id="cb-br-note" style="font-size:11px;"></span></td>
+              <td style="padding:10px;text-align:right;font-family:JetBrains Mono,monospace;" id="cb-br">$0.00</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:10px;color:var(--text2);">Extra Beds <span id="cb-beds-note" style="font-size:11px;"></span></td>
+              <td style="padding:10px;text-align:right;font-family:JetBrains Mono,monospace;" id="cb-beds">$0.00</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:10px;color:var(--text2);">Linen Delivery (15% discount)</td>
+              <td style="padding:10px;text-align:right;font-family:JetBrains Mono,monospace;" id="cb-linen">$0.00</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:10px;color:var(--text2);">Pets Allowed (5% increase)</td>
+              <td style="padding:10px;text-align:right;font-family:JetBrains Mono,monospace;" id="cb-pets">$0.00</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:10px;color:var(--text2);">Adjustments</td>
+              <td style="padding:10px;text-align:right;font-family:JetBrains Mono,monospace;" id="cb-adjust">$0.00</td>
+            </tr>
+            <tr style="border-bottom:2px solid var(--accent);background:var(--surface2);">
+              <td style="padding:12px;font-weight:700;font-size:15px;">Calculation Total</td>
+              <td style="padding:12px;text-align:right;font-family:JetBrains Mono,monospace;font-weight:700;font-size:15px;color:var(--accent);" id="cb-total">$75.00</td>
+            </tr>
+            <tr style="background:var(--surface2);">
+              <td style="padding:12px;font-weight:700;font-size:16px;color:var(--accent);">Standard Turnover Rate</td>
+              <td style="padding:12px;text-align:right;font-family:JetBrains Mono,monospace;font-weight:700;font-size:18px;color:var(--accent);" id="cb-standard">$75.00</td>
+            </tr>
+            <tr>
+              <td style="padding:12px;font-weight:600;color:var(--blue);">Deep Clean Rate (130%)</td>
+              <td style="padding:12px;text-align:right;font-family:JetBrains Mono,monospace;font-weight:700;font-size:16px;color:var(--blue);" id="cb-deep">$100.00</td>
+            </tr>
+          </table>
+        </div>
+      </div>
+      <!-- Prospect Homes Table -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;">
+        <h3 style="margin:0 0 16px 0;font-size:16px;">🏠 Prospect Homes</h3>
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+              <tr style="background:var(--surface2);text-align:left;">
+                <th style="padding:10px;border-bottom:1px solid var(--border);">Date</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);">Property</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);">Calculated Rate</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);">Deep Clean</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);">Proposed Rate</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);">Status</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="prospects-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
   <script>
     function getLocalDate(offset) {
@@ -163,14 +295,21 @@
       document.getElementById('tab-tomorrow').className = tab === 'tomorrow' ? 'tab active' : 'tab';
       document.getElementById('tab-dayafter').className = tab === 'dayafter' ? 'tab active' : 'tab';
       document.getElementById('tab-payments').className = tab === 'payments' ? 'tab active' : 'tab';
+      document.getElementById('tab-calculator').className = tab === 'calculator' ? 'tab active' : 'tab';
       
       // Show/hide sections
-      document.getElementById('jobs').style.display = tab === 'payments' ? 'none' : 'block';
+      var isOps = (tab === 'today' || tab === 'tomorrow' || tab === 'dayafter');
+      document.getElementById('jobs').style.display = isOps ? 'block' : 'none';
       document.getElementById('payments-section').style.display = tab === 'payments' ? 'block' : 'none';
-      document.querySelector('.section-header').style.display = tab === 'payments' ? 'none' : 'flex';
+      document.getElementById('calculator-section').style.display = tab === 'calculator' ? 'block' : 'none';
+      document.querySelector('.section-header').style.display = isOps ? 'flex' : 'none';
       
       if (tab === 'payments') {
         loadPayments();
+        return;
+      }
+      if (tab === 'calculator') {
+        loadProspects();
         return;
       }
       var isFuture = (tab === 'tomorrow' || tab === 'dayafter');
@@ -545,7 +684,7 @@
         // Cleaner info - Joe Anderson is hourly, not flat rate
         var cleanerName = j.cleaner_name || '-';
         var cleanerNorm = (j.cleaner_name || '').toLowerCase().replace(/\s+/g, ' ').trim();
-        var isHourly = cleanerNorm === 'joe anderson';
+        var isHourly = cleanerNorm === 'joe anderson' || cleanerNorm.includes('carlos beb');
         var cleanerRate = isHourly ? '<span style="color:var(--text2);font-style:italic">Hourly</span>' : (j.cleaner_rate > 0 ? '$' + j.cleaner_rate.toFixed(0) : '-');
         
         // Cleaner payment - show Paid/Unpaid button for hourly cleaners too
@@ -593,6 +732,196 @@
 
     loadAllJobs();
     setInterval(loadAllJobs, 60000);
+
+    // ═══════════════════════════════════════════════════════
+    // RATE CALCULATOR & PROSPECTS
+    // ═══════════════════════════════════════════════════════
+    
+    function calcRate() {
+      var sf = parseFloat(document.getElementById('calc-sf').value) || 0;
+      var fullBaths = parseInt(document.getElementById('calc-fullbaths').value) || 0;
+      var halfBaths = parseInt(document.getElementById('calc-halfbaths').value) || 0;
+      var bedrooms = parseInt(document.getElementById('calc-bedrooms').value) || 0;
+      var beds = parseInt(document.getElementById('calc-beds').value) || 0;
+      var linen = document.getElementById('calc-linen').checked;
+      var pets = document.getElementById('calc-pets').checked;
+      var adjust = parseFloat(document.getElementById('calc-adjust').value) || 0;
+      
+      // Base: $75 for first 1500 SF
+      var base = 75;
+      
+      // Additional SF: $0.04/SF over 1500
+      var extraSF = Math.max(0, sf - 1500);
+      var sfCost = extraSF * 0.04;
+      
+      // Bathrooms
+      var fbCost = fullBaths * 40;
+      var hbCost = halfBaths * 30;
+      
+      // Bedrooms
+      var brCost = bedrooms * 30;
+      
+      // Extra beds above bedroom count
+      var extraBeds = Math.max(0, beds - bedrooms);
+      var bedsCost = extraBeds * 12;
+      
+      // Subtotal before modifiers
+      var subtotal = base + sfCost + fbCost + hbCost + brCost + bedsCost;
+      
+      // Linen delivery: 15% discount on subtotal
+      var linenDiscount = linen ? -(subtotal * 0.15) : 0;
+      
+      // Pets: 5% increase on subtotal
+      var petsIncrease = pets ? (subtotal * 0.05) : 0;
+      
+      // Total
+      var total = subtotal + linenDiscount + petsIncrease + adjust;
+      
+      // Standard rate: round up to nearest $5
+      var standard = Math.ceil(total / 5) * 5;
+      
+      // Deep clean: 130% of standard, rounded up to nearest $5
+      var deep = Math.ceil((standard * 1.3) / 5) * 5;
+      
+      // Update breakdown display
+      document.getElementById('cb-base').textContent = '$' + base.toFixed(2);
+      document.getElementById('cb-sf').textContent = '$' + sfCost.toFixed(2);
+      document.getElementById('cb-sf-note').textContent = extraSF > 0 ? '(' + extraSF.toFixed(0) + ' SF × $0.04)' : '';
+      document.getElementById('cb-fb').textContent = '$' + fbCost.toFixed(2);
+      document.getElementById('cb-fb-note').textContent = fullBaths > 0 ? '(' + fullBaths + ' × $40)' : '';
+      document.getElementById('cb-hb').textContent = '$' + hbCost.toFixed(2);
+      document.getElementById('cb-hb-note').textContent = halfBaths > 0 ? '(' + halfBaths + ' × $30)' : '';
+      document.getElementById('cb-br').textContent = '$' + brCost.toFixed(2);
+      document.getElementById('cb-br-note').textContent = bedrooms > 0 ? '(' + bedrooms + ' × $30)' : '';
+      document.getElementById('cb-beds').textContent = '$' + bedsCost.toFixed(2);
+      document.getElementById('cb-beds-note').textContent = extraBeds > 0 ? '(' + extraBeds + ' extra × $12)' : '';
+      document.getElementById('cb-linen').textContent = linenDiscount !== 0 ? '-$' + Math.abs(linenDiscount).toFixed(2) : '$0.00';
+      document.getElementById('cb-pets').textContent = '$' + petsIncrease.toFixed(2);
+      document.getElementById('cb-adjust').textContent = adjust >= 0 ? '$' + adjust.toFixed(2) : '-$' + Math.abs(adjust).toFixed(2);
+      document.getElementById('cb-total').textContent = '$' + total.toFixed(2);
+      document.getElementById('cb-standard').textContent = '$' + standard.toFixed(2);
+      document.getElementById('cb-deep').textContent = '$' + deep.toFixed(2);
+      
+      return { total: total, standard: standard, deep: deep };
+    }
+    
+    async function saveProspect() {
+      var name = document.getElementById('calc-name').value.trim();
+      if (!name) { alert('Please enter a property name.'); return; }
+      
+      var rates = calcRate();
+      var editId = document.getElementById('calc-edit-id').value;
+      
+      var data = {
+        property_name: name,
+        total_sf: parseFloat(document.getElementById('calc-sf').value) || 0,
+        full_baths: parseInt(document.getElementById('calc-fullbaths').value) || 0,
+        half_baths: parseInt(document.getElementById('calc-halfbaths').value) || 0,
+        bedrooms: parseInt(document.getElementById('calc-bedrooms').value) || 0,
+        beds: parseInt(document.getElementById('calc-beds').value) || 0,
+        linen_delivery: document.getElementById('calc-linen').checked ? 1 : 0,
+        pets_allowed: document.getElementById('calc-pets').checked ? 1 : 0,
+        adjustments: parseFloat(document.getElementById('calc-adjust').value) || 0,
+        calculated_rate: rates.standard,
+        deep_clean_rate: rates.deep,
+        proposed_rate: parseFloat(document.getElementById('calc-proposed').value) || 0,
+        notes: document.getElementById('calc-notes').value.trim()
+      };
+      if (editId) data.id = editId;
+      
+      await fetch('/api/prospects', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+      
+      // Reset form
+      document.getElementById('calc-edit-id').value = '';
+      document.getElementById('calc-name').value = '';
+      document.getElementById('calc-sf').value = '0';
+      document.getElementById('calc-fullbaths').value = '0';
+      document.getElementById('calc-halfbaths').value = '0';
+      document.getElementById('calc-bedrooms').value = '0';
+      document.getElementById('calc-beds').value = '0';
+      document.getElementById('calc-linen').checked = false;
+      document.getElementById('calc-pets').checked = false;
+      document.getElementById('calc-adjust').value = '0';
+      document.getElementById('calc-proposed').value = '0';
+      document.getElementById('calc-notes').value = '';
+      calcRate();
+      
+      loadProspects();
+    }
+    
+    async function loadProspects() {
+      try {
+        var r = await fetch('/api/prospects');
+        var prospects = await r.json();
+        renderProspects(prospects);
+      } catch(e) {
+        document.getElementById('prospects-body').innerHTML = '<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--text2)">Error: ' + e.message + '</td></tr>';
+      }
+    }
+    
+    function renderProspects(prospects) {
+      if (!prospects.length) {
+        document.getElementById('prospects-body').innerHTML = '<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--text2)">No prospect homes yet. Use the calculator to add one.</td></tr>';
+        return;
+      }
+      document.getElementById('prospects-body').innerHTML = prospects.map(function(p) {
+        var dateStr = new Date(p.created_at).toLocaleDateString('en-US', {month:'short', day:'numeric'});
+        var proposed = p.proposed_rate > 0 ? '$' + p.proposed_rate.toFixed(0) : '-';
+        
+        var statusBtn;
+        if (p.status === 'won') {
+          statusBtn = '<button onclick="setProspectStatus(\'' + p.id + '\',\'prospect\')" style="background:var(--accent);color:#000;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">✅ Won</button>';
+        } else if (p.status === 'lost') {
+          statusBtn = '<button onclick="setProspectStatus(\'' + p.id + '\',\'prospect\')" style="background:rgba(239,68,68,0.15);color:var(--danger);border:1px solid var(--danger);padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">❌ Lost</button>';
+        } else {
+          statusBtn = '<button onclick="setProspectStatus(\'' + p.id + '\',\'won\')" style="background:rgba(34,197,94,0.15);color:var(--accent);border:1px solid var(--accent);padding:3px 8px;border-radius:6px;font-size:10px;font-weight:600;cursor:pointer;margin-right:4px;">Won</button>' +
+            '<button onclick="setProspectStatus(\'' + p.id + '\',\'lost\')" style="background:rgba(239,68,68,0.15);color:var(--danger);border:1px solid var(--danger);padding:3px 8px;border-radius:6px;font-size:10px;font-weight:600;cursor:pointer;">Lost</button>';
+        }
+        
+        return '<tr style="border-bottom:1px solid var(--border);cursor:pointer;" onclick="editProspect(\'' + p.id + '\')">' +
+          '<td style="padding:10px;">' + dateStr + '</td>' +
+          '<td style="padding:10px;font-weight:500;">' + p.property_name + '</td>' +
+          '<td style="padding:10px;font-family:JetBrains Mono,monospace;font-weight:600;color:var(--accent);">$' + p.calculated_rate.toFixed(0) + '</td>' +
+          '<td style="padding:10px;font-family:JetBrains Mono,monospace;color:var(--blue);">$' + p.deep_clean_rate.toFixed(0) + '</td>' +
+          '<td style="padding:10px;font-family:JetBrains Mono,monospace;font-weight:600;">' + proposed + '</td>' +
+          '<td style="padding:10px;" onclick="event.stopPropagation()">' + statusBtn + '</td>' +
+          '<td style="padding:10px;" onclick="event.stopPropagation()"><button onclick="deleteProspect(\'' + p.id + '\')" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:14px;" title="Delete">🗑️</button></td>' +
+        '</tr>';
+      }).join('');
+    }
+    
+    async function editProspect(id) {
+      var r = await fetch('/api/prospects/' + id);
+      var p = await r.json();
+      
+      document.getElementById('calc-edit-id').value = p.id;
+      document.getElementById('calc-name').value = p.property_name;
+      document.getElementById('calc-sf').value = p.total_sf || 0;
+      document.getElementById('calc-fullbaths').value = p.full_baths || 0;
+      document.getElementById('calc-halfbaths').value = p.half_baths || 0;
+      document.getElementById('calc-bedrooms').value = p.bedrooms || 0;
+      document.getElementById('calc-beds').value = p.beds || 0;
+      document.getElementById('calc-linen').checked = !!p.linen_delivery;
+      document.getElementById('calc-pets').checked = !!p.pets_allowed;
+      document.getElementById('calc-adjust').value = p.adjustments || 0;
+      document.getElementById('calc-proposed').value = p.proposed_rate || 0;
+      document.getElementById('calc-notes').value = p.notes || '';
+      calcRate();
+      
+      // Scroll to top of calculator
+      document.getElementById('calculator-section').scrollIntoView({behavior:'smooth'});
+    }
+    
+    async function setProspectStatus(id, status) {
+      await fetch('/api/prospects/' + id + '/status', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({status:status})});
+      loadProspects();
+    }
+    
+    async function deleteProspect(id) {
+      if (!confirm('Delete this prospect?')) return;
+      await fetch('/api/prospects/' + id, {method:'DELETE'});
+      loadProspects();
+    }
   </script>
 </body>
 </html>
