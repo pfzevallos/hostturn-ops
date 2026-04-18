@@ -82,26 +82,43 @@ async function syncProperties() {
   if (!data.length) return [];
   const db = getDb();
   const upsert = db.prepare(`
-    INSERT INTO properties (id, name, group_name, address, beds, baths, bw_data, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
-    ON CONFLICT(id) DO UPDATE SET name=?, group_name=?, address=?, beds=?, baths=?, bw_data=?, updated_at=datetime('now')
+    INSERT INTO properties (id, name, group_name, address, beds, baths, city, state, owner_manager, bw_data, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(id) DO UPDATE SET name=?, group_name=?, address=?, beds=?, baths=?,
+      city=CASE WHEN city IS NULL OR city = '' THEN ? ELSE city END,
+      state=CASE WHEN state IS NULL OR state = '' THEN ? ELSE state END,
+      owner_manager=CASE WHEN owner_manager IS NULL OR owner_manager = '' THEN ? ELSE owner_manager END,
+      bw_data=?, updated_at=datetime('now')
   `);
   const insertMany = db.transaction(() => {
     for (const p of data) {
       const groupName = p.group_name || (p.groups && p.groups[0] && p.groups[0].name) || "";
       const address = p.address || p.address1 || "";
-      const vals = [String(Math.round(p.id)), p.name || p.display || "", groupName, address, p.bedrooms || 0, p.bathrooms || 0, JSON.stringify(p)];
-      upsert.run(...vals, ...vals.slice(1));
+      const city = p.city || "";
+      const state = p.state || "";
+      // Extract owner from property name (after " - ")
+      const nameParts = (p.name || "").split(" - ");
+      const ownerFromName = nameParts.length > 1 ? nameParts[nameParts.length - 1].trim() : groupName;
+      const id = String(Math.round(p.id));
+      upsert.run(
+        id, p.name || p.display || "", groupName, address, p.bedrooms || 0, p.bathrooms || 0,
+        city, state, ownerFromName, JSON.stringify(p),
+        // ON CONFLICT updates:
+        p.name || p.display || "", groupName, address, p.bedrooms || 0, p.bathrooms || 0,
+        city, state, ownerFromName, JSON.stringify(p)
+      );
     }
   });
   insertMany();
   
-  // Remove properties from DB that are no longer active
+  // Remove properties from DB that are no longer active (keep manual ones)
   const activeIds = data.map(p => String(Math.round(p.id)));
-  const dbProps = db.prepare("SELECT id FROM properties").all();
+  const dbProps = db.prepare("SELECT id, is_manual FROM properties").all();
+  let removed = 0;
   for (const dbp of dbProps) {
-    if (!activeIds.includes(String(dbp.id))) {
+    if (!activeIds.includes(String(dbp.id)) && !dbp.is_manual) {
       db.prepare("DELETE FROM properties WHERE id = ?").run(dbp.id);
+      removed++;
     }
   }
   
@@ -273,17 +290,19 @@ async function syncTasksForDate(date) {
         "craryville, 30 golf course": 335,
       };
       
-      // Look up rate by matching property name - ALWAYS check table to pick up changes
-      let rate = 0;
-      const propNameLower = (t._prop.name || "").toLowerCase();
-      for (const [key, val] of Object.entries(RATE_TABLE)) {
-        if (propNameLower.includes(key)) {
-          rate = val;
-          break;
+      // Look up rate - property DB rate takes priority (editable from Homes tab)
+      // then hardcoded RATE_TABLE as fallback, then existing job rate
+      let rate = propDb?.rate || 0;
+      if (!rate) {
+        const propNameLower = (t._prop.name || "").toLowerCase();
+        for (const [key, val] of Object.entries(RATE_TABLE)) {
+          if (propNameLower.includes(key)) {
+            rate = val;
+            break;
+          }
         }
       }
-      // Fall back to existing rate or property DB rate
-      if (!rate) rate = existing?.rate || propDb?.rate || 0;
+      if (!rate) rate = existing?.rate || 0;
 
       upsert.run(
         id, date, String(parseInt(t.id, 10)), String(Math.round(t._prop.id)), t._prop.name || "", t._prop.group_name || "",
