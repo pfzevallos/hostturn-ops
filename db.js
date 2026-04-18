@@ -199,6 +199,29 @@ function initTables() {
   try { db.exec("ALTER TABLE jobs ADD COLUMN report_verified_at TEXT"); } catch(e) {}
   try { db.exec("ALTER TABLE contacts ADD COLUMN cc_email TEXT"); } catch(e) {}
 
+  // Properties management columns
+  try { db.exec("ALTER TABLE properties ADD COLUMN region TEXT DEFAULT ''"); } catch(e) {}
+  try { db.exec("ALTER TABLE properties ADD COLUMN city TEXT DEFAULT ''"); } catch(e) {}
+  try { db.exec("ALTER TABLE properties ADD COLUMN state TEXT DEFAULT ''"); } catch(e) {}
+  try { db.exec("ALTER TABLE properties ADD COLUMN owner_manager TEXT DEFAULT ''"); } catch(e) {}
+  try { db.exec("ALTER TABLE properties ADD COLUMN standard_rate REAL DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE properties ADD COLUMN deep_clean_rate REAL DEFAULT 0"); } catch(e) {}
+
+  // Properties management columns
+  try { db.exec("ALTER TABLE properties ADD COLUMN region TEXT DEFAULT ''"); } catch(e) {}
+  try { db.exec("ALTER TABLE properties ADD COLUMN city TEXT DEFAULT ''"); } catch(e) {}
+  try { db.exec("ALTER TABLE properties ADD COLUMN state TEXT DEFAULT ''"); } catch(e) {}
+  try { db.exec("ALTER TABLE properties ADD COLUMN owner_manager TEXT DEFAULT ''"); } catch(e) {}
+  try { db.exec("ALTER TABLE properties ADD COLUMN deep_clean_rate REAL DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE properties ADD COLUMN is_manual INTEGER DEFAULT 0"); } catch(e) {}
+  // Properties table enhancements
+  try { db.exec("ALTER TABLE properties ADD COLUMN region TEXT DEFAULT ''"); } catch(e) {}
+  try { db.exec("ALTER TABLE properties ADD COLUMN city TEXT DEFAULT ''"); } catch(e) {}
+  try { db.exec("ALTER TABLE properties ADD COLUMN state TEXT DEFAULT ''"); } catch(e) {}
+  try { db.exec("ALTER TABLE properties ADD COLUMN owner_manager TEXT DEFAULT ''"); } catch(e) {}
+  try { db.exec("ALTER TABLE properties ADD COLUMN deep_clean_rate REAL DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE properties ADD COLUMN is_manual INTEGER DEFAULT 0"); } catch(e) {}
+
   // Prospects table for Rate Calculator
   db.exec(`
     CREATE TABLE IF NOT EXISTS prospects (
