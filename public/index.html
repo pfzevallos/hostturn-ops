@@ -84,6 +84,7 @@
       <div class="tab" id="tab-dayafter" onclick="switchTab('dayafter')">Day After <span class="count" id="count-dayafter">—</span></div>
       <div class="tab" id="tab-payments" onclick="switchTab('payments')">Payments 💰</div>
       <div class="tab" id="tab-calculator" onclick="switchTab('calculator')">Rate Calculator 🧮</div>
+      <div class="tab" id="tab-homes" onclick="switchTab('homes')">Homes 🏠</div>
     </div>
     <div class="section-header">
       <h2 id="schedule-title">Today's Schedule</h2>
@@ -270,6 +271,90 @@
         </div>
       </div>
     </div>
+    <!-- Homes Management Section -->
+    <div id="homes-section" style="display:none">
+      <!-- Add/Edit Form -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:24px;">
+        <h3 style="margin:0 0 16px 0;font-size:16px;" id="homes-form-title">➕ Add New Home</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+          <div>
+            <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Region *</label>
+            <select id="home-region" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+              <option value="">Select region...</option>
+              <option value="Southern VT">Southern VT</option>
+              <option value="Hudson Valley, NY">Hudson Valley, NY</option>
+              <option value="Poconos, PA">Poconos, PA</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Property Name *</label>
+            <input type="text" id="home-name" placeholder="e.g. Dover, 185 Tanglewood 56B" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Address</label>
+            <input type="text" id="home-address" placeholder="Full street address" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">City</label>
+            <input type="text" id="home-city" placeholder="City" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">State</label>
+            <input type="text" id="home-state" placeholder="e.g. VT" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Owner / Manager</label>
+            <input type="text" id="home-owner" placeholder="Owner or PM name" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Bedrooms</label>
+            <input type="number" id="home-beds" value="0" min="0" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Bathrooms</label>
+            <input type="number" id="home-baths" value="0" min="0" step="0.5" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Standard Rate ($)</label>
+            <input type="number" id="home-rate" value="0" min="0" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Deep Clean Rate ($)</label>
+            <input type="number" id="home-deeprate" value="0" min="0" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:16px;">
+          <button class="btn" onclick="saveHome()" style="padding:10px 24px;font-size:14px;" id="home-save-btn">💾 Add Home</button>
+          <button class="btn" onclick="cancelEditHome()" style="display:none;padding:10px 24px;font-size:14px;background:var(--surface2);color:var(--text);" id="home-cancel-btn">Cancel</button>
+        </div>
+        <input type="hidden" id="home-edit-id" value="">
+      </div>
+      <!-- Homes Table -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <h3 style="margin:0;font-size:16px;">Active Homes (<span id="homes-count">0</span>)</h3>
+          <input type="text" id="homes-search" placeholder="Search homes..." oninput="filterHomes()" style="padding:6px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:13px;width:220px;">
+        </div>
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;" id="homes-table">
+            <thead>
+              <tr style="background:var(--surface2);text-align:left;">
+                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('region')">Region ⇅</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('name')">Property ⇅</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('city')">City ⇅</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('owner_manager')">Owner/Manager ⇅</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('beds')">Beds ⇅</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('baths')">Baths ⇅</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('rate')">Std Rate ⇅</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('deep_clean_rate')">Deep Clean ⇅</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="homes-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
   <script>
     function getLocalDate(offset) {
@@ -296,12 +381,14 @@
       document.getElementById('tab-dayafter').className = tab === 'dayafter' ? 'tab active' : 'tab';
       document.getElementById('tab-payments').className = tab === 'payments' ? 'tab active' : 'tab';
       document.getElementById('tab-calculator').className = tab === 'calculator' ? 'tab active' : 'tab';
+      document.getElementById('tab-homes').className = tab === 'homes' ? 'tab active' : 'tab';
       
       // Show/hide sections
       var isOps = (tab === 'today' || tab === 'tomorrow' || tab === 'dayafter');
       document.getElementById('jobs').style.display = isOps ? 'block' : 'none';
       document.getElementById('payments-section').style.display = tab === 'payments' ? 'block' : 'none';
       document.getElementById('calculator-section').style.display = tab === 'calculator' ? 'block' : 'none';
+      document.getElementById('homes-section').style.display = tab === 'homes' ? 'block' : 'none';
       document.querySelector('.section-header').style.display = isOps ? 'flex' : 'none';
       
       if (tab === 'payments') {
@@ -310,6 +397,10 @@
       }
       if (tab === 'calculator') {
         loadProspects();
+        return;
+      }
+      if (tab === 'homes') {
+        loadHomes();
         return;
       }
       var isFuture = (tab === 'tomorrow' || tab === 'dayafter');
@@ -921,6 +1012,154 @@
       if (!confirm('Delete this prospect?')) return;
       await fetch('/api/prospects/' + id, {method:'DELETE'});
       loadProspects();
+    }
+
+    // ═══════════════════════════════════════════════════════
+    // HOMES MANAGEMENT
+    // ═══════════════════════════════════════════════════════
+    
+    var allHomes = [];
+    var homesSortCol = 'region';
+    var homesSortDir = 1;
+    
+    async function loadHomes() {
+      try {
+        var r = await fetch('/api/properties/all');
+        allHomes = await r.json();
+        document.getElementById('homes-count').textContent = allHomes.length;
+        renderHomes();
+      } catch(e) {
+        document.getElementById('homes-body').innerHTML = '<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--text2)">Error: ' + e.message + '</td></tr>';
+      }
+    }
+    
+    function sortHomes(col) {
+      if (homesSortCol === col) {
+        homesSortDir = -homesSortDir;
+      } else {
+        homesSortCol = col;
+        homesSortDir = 1;
+      }
+      renderHomes();
+    }
+    
+    function filterHomes() {
+      renderHomes();
+    }
+    
+    function renderHomes() {
+      var search = (document.getElementById('homes-search').value || '').toLowerCase();
+      var homes = allHomes.filter(function(h) {
+        if (!search) return true;
+        return (h.name||'').toLowerCase().includes(search) ||
+          (h.region||'').toLowerCase().includes(search) ||
+          (h.city||'').toLowerCase().includes(search) ||
+          (h.owner_manager||'').toLowerCase().includes(search) ||
+          (h.address||'').toLowerCase().includes(search);
+      });
+      
+      homes.sort(function(a, b) {
+        var va = a[homesSortCol] || '';
+        var vb = b[homesSortCol] || '';
+        if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * homesSortDir;
+        return String(va).localeCompare(String(vb)) * homesSortDir;
+      });
+      
+      if (!homes.length) {
+        document.getElementById('homes-body').innerHTML = '<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--text2)">No homes found.</td></tr>';
+        return;
+      }
+      
+      document.getElementById('homes-body').innerHTML = homes.map(function(h) {
+        var rate = h.rate > 0 ? '$' + h.rate.toFixed(0) : '-';
+        var deep = h.deep_clean_rate > 0 ? '$' + h.deep_clean_rate.toFixed(0) : '-';
+        var regionBadge = '';
+        if (h.region === 'Southern VT') regionBadge = '<span style="background:rgba(34,197,94,0.15);color:var(--accent);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">VT</span>';
+        else if (h.region === 'Hudson Valley, NY') regionBadge = '<span style="background:rgba(59,130,246,0.15);color:var(--blue);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">NY</span>';
+        else if (h.region === 'Poconos, PA') regionBadge = '<span style="background:rgba(245,158,11,0.15);color:var(--warn);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">PA</span>';
+        else regionBadge = '<span style="color:var(--text2);font-size:11px;">' + (h.region || '-') + '</span>';
+        
+        var propName = h.name || '-';
+        var city = h.city || '-';
+        var owner = h.owner_manager || '-';
+        
+        return '<tr style="border-bottom:1px solid var(--border);">' +
+          '<td style="padding:10px;">' + regionBadge + '</td>' +
+          '<td style="padding:10px;font-weight:500;">' + propName + '</td>' +
+          '<td style="padding:10px;font-size:12px;">' + city + '</td>' +
+          '<td style="padding:10px;font-size:12px;">' + owner + '</td>' +
+          '<td style="padding:10px;text-align:center;">' + (h.beds || '-') + '</td>' +
+          '<td style="padding:10px;text-align:center;">' + (h.baths || '-') + '</td>' +
+          '<td style="padding:10px;font-family:JetBrains Mono,monospace;font-weight:600;color:var(--accent);">' + rate + '</td>' +
+          '<td style="padding:10px;font-family:JetBrains Mono,monospace;color:var(--blue);">' + deep + '</td>' +
+          '<td style="padding:10px;"><button onclick="editHome(\'' + h.id + '\')" style="background:none;border:none;cursor:pointer;font-size:14px;" title="Edit">✏️</button></td>' +
+        '</tr>';
+      }).join('');
+    }
+    
+    function editHome(id) {
+      var h = allHomes.find(function(x) { return x.id === id; });
+      if (!h) return;
+      document.getElementById('home-edit-id').value = h.id;
+      document.getElementById('home-region').value = h.region || '';
+      document.getElementById('home-name').value = h.name || '';
+      document.getElementById('home-address').value = h.address || '';
+      document.getElementById('home-city').value = h.city || '';
+      document.getElementById('home-state').value = h.state || '';
+      document.getElementById('home-owner').value = h.owner_manager || '';
+      document.getElementById('home-beds').value = h.beds || 0;
+      document.getElementById('home-baths').value = h.baths || 0;
+      document.getElementById('home-rate').value = h.rate || 0;
+      document.getElementById('home-deeprate').value = h.deep_clean_rate || 0;
+      document.getElementById('homes-form-title').textContent = '✏️ Edit: ' + (h.name || 'Home');
+      document.getElementById('home-save-btn').textContent = '💾 Save Changes';
+      document.getElementById('home-cancel-btn').style.display = 'inline-flex';
+      document.getElementById('homes-section').scrollTo({top:0, behavior:'smooth'});
+    }
+    
+    function cancelEditHome() {
+      document.getElementById('home-edit-id').value = '';
+      document.getElementById('home-region').value = '';
+      document.getElementById('home-name').value = '';
+      document.getElementById('home-address').value = '';
+      document.getElementById('home-city').value = '';
+      document.getElementById('home-state').value = '';
+      document.getElementById('home-owner').value = '';
+      document.getElementById('home-beds').value = '0';
+      document.getElementById('home-baths').value = '0';
+      document.getElementById('home-rate').value = '0';
+      document.getElementById('home-deeprate').value = '0';
+      document.getElementById('homes-form-title').textContent = '➕ Add New Home';
+      document.getElementById('home-save-btn').textContent = '💾 Add Home';
+      document.getElementById('home-cancel-btn').style.display = 'none';
+    }
+    
+    async function saveHome() {
+      var name = document.getElementById('home-name').value.trim();
+      if (!name) { alert('Please enter a property name.'); return; }
+      
+      var editId = document.getElementById('home-edit-id').value;
+      var data = {
+        name: name,
+        address: document.getElementById('home-address').value.trim(),
+        region: document.getElementById('home-region').value,
+        city: document.getElementById('home-city').value.trim(),
+        state: document.getElementById('home-state').value.trim(),
+        owner_manager: document.getElementById('home-owner').value.trim(),
+        beds: parseInt(document.getElementById('home-beds').value) || 0,
+        baths: parseFloat(document.getElementById('home-baths').value) || 0,
+        rate: parseFloat(document.getElementById('home-rate').value) || 0,
+        deep_clean_rate: parseFloat(document.getElementById('home-deeprate').value) || 0
+      };
+      
+      if (editId) {
+        await fetch('/api/properties/' + editId + '/update', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+      } else {
+        await fetch('/api/properties/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+      }
+      
+      cancelEditHome();
+      loadHomes();
     }
   </script>
 </body>
