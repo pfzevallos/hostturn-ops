@@ -981,28 +981,6 @@ app.get("/api/properties/all", (req, res) => {
   res.json(result);
 });
 
-// Update property details
-app.post("/api/properties/:id/update", (req, res) => {
-  const db = getDb();
-  const p = req.body;
-  db.prepare(`UPDATE properties SET 
-    region=?, city=?, state=?, beds=?, baths=?, owner_manager=?, standard_rate=?, deep_clean_rate=?, rate=?, updated_at=datetime('now')
-    WHERE id = ?`
-  ).run(p.region||'', p.city||'', p.state||'', p.beds||0, p.baths||0, p.owner_manager||'', p.standard_rate||0, p.deep_clean_rate||0, p.standard_rate||0, req.params.id);
-  res.json({ ok: true });
-});
-
-// Add a new property manually (not from Breezeway)
-app.post("/api/properties/add", (req, res) => {
-  const db = getDb();
-  const p = req.body;
-  const id = "prop" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-  db.prepare(`INSERT INTO properties (id, name, address, group_name, beds, baths, rate, region, city, state, owner_manager, standard_rate, deep_clean_rate, bw_data, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', datetime('now'))`
-  ).run(id, p.name||'', p.address||'', p.group_name||'', p.beds||0, p.baths||0, p.standard_rate||0, p.region||'', p.city||'', p.state||'', p.owner_manager||'', p.standard_rate||0, p.deep_clean_rate||0);
-  res.json({ id });
-});
-
 // ═══════════════════════════════════════════════════════
 // RATE CALCULATOR & PROSPECTS
 // ═══════════════════════════════════════════════════════
