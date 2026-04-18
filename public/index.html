@@ -282,7 +282,9 @@
             <select id="home-region" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
               <option value="">Select region...</option>
               <option value="Southern VT">Southern VT</option>
+              <option value="Champlain Valley, VT">Champlain Valley, VT</option>
               <option value="Hudson Valley, NY">Hudson Valley, NY</option>
+              <option value="Jersey Shore, NJ">Jersey Shore, NJ</option>
               <option value="Poconos, PA">Poconos, PA</option>
             </select>
           </div>
@@ -1074,8 +1076,10 @@
         var rate = h.rate > 0 ? '$' + h.rate.toFixed(0) : '-';
         var deep = h.deep_clean_rate > 0 ? '$' + h.deep_clean_rate.toFixed(0) : '-';
         var regionBadge = '';
-        if (h.region === 'Southern VT') regionBadge = '<span style="background:rgba(34,197,94,0.15);color:var(--accent);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">VT</span>';
-        else if (h.region === 'Hudson Valley, NY') regionBadge = '<span style="background:rgba(59,130,246,0.15);color:var(--blue);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">NY</span>';
+        if (h.region === 'Southern VT') regionBadge = '<span style="background:rgba(34,197,94,0.15);color:var(--accent);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">S. VT</span>';
+        else if (h.region === 'Champlain Valley, VT') regionBadge = '<span style="background:rgba(168,85,247,0.15);color:#a855f7;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">CV VT</span>';
+        else if (h.region === 'Hudson Valley, NY') regionBadge = '<span style="background:rgba(59,130,246,0.15);color:var(--blue);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">HV NY</span>';
+        else if (h.region === 'Jersey Shore, NJ') regionBadge = '<span style="background:rgba(236,72,153,0.15);color:#ec4899;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">JS NJ</span>';
         else if (h.region === 'Poconos, PA') regionBadge = '<span style="background:rgba(245,158,11,0.15);color:var(--warn);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">PA</span>';
         else regionBadge = '<span style="color:var(--text2);font-size:11px;">' + (h.region || '-') + '</span>';
         
