@@ -339,6 +339,57 @@ app.post("/api/jobs/:jobId/report-verified", (req, res) => {
   res.json({ ok: true });
 });
 
+// ═══════════════════════════════════════════════════════
+// PROPERTY MANAGEMENT (Homes)
+// ═══════════════════════════════════════════════════════
+
+// Get all properties with enhanced fields
+app.get("/api/properties/all", (req, res) => {
+  const db = getDb();
+  const props = db.prepare("SELECT * FROM properties ORDER BY region, name").all();
+  res.json(props);
+});
+
+// Update property details
+app.post("/api/properties/:id/update", (req, res) => {
+  const db = getDb();
+  const p = req.body;
+  db.prepare(`UPDATE properties SET 
+    name=?, address=?, beds=?, baths=?, rate=?, deep_clean_rate=?,
+    region=?, city=?, state=?, owner_manager=?, updated_at=datetime('now')
+    WHERE id = ?`).run(
+    p.name||'', p.address||'', p.beds||0, p.baths||0, p.rate||0, p.deep_clean_rate||0,
+    p.region||'', p.city||'', p.state||'', p.owner_manager||'', req.params.id
+  );
+  res.json({ ok: true });
+});
+
+// Add a new manually-created property
+app.post("/api/properties/add", (req, res) => {
+  const db = getDb();
+  const p = req.body;
+  const id = "mp" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  db.prepare(`INSERT INTO properties (id, name, address, beds, baths, rate, deep_clean_rate,
+    region, city, state, owner_manager, group_name, is_manual, bw_data, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, '{}', datetime('now'))`).run(
+    id, p.name||'', p.address||'', p.beds||0, p.baths||0, p.rate||0, p.deep_clean_rate||0,
+    p.region||'', p.city||'', p.state||'', p.owner_manager||'', p.group_name||''
+  );
+  res.json({ id });
+});
+
+// Delete a manually-created property
+app.delete("/api/properties/:id", (req, res) => {
+  const db = getDb();
+  const prop = db.prepare("SELECT is_manual FROM properties WHERE id = ?").get(req.params.id);
+  if (prop && prop.is_manual) {
+    db.prepare("DELETE FROM properties WHERE id = ?").run(req.params.id);
+    res.json({ ok: true });
+  } else {
+    res.json({ ok: false, error: "Cannot delete Breezeway-synced properties" });
+  }
+});
+
 // --- Breezeway sync ---
 app.post("/api/sync/properties", async (req, res) => {
   try { const data = await bw.syncProperties(); res.json({ count: data.length }); }
@@ -903,6 +954,53 @@ cron.schedule("0 18 * * *", async () => {
     console.log(`[CRON] Evening sync for ${date}`);
     await bw.syncTasksForDate(date);
   } catch (e) { console.error("[CRON] Evening sync error:", e.message); }
+});
+
+// ═══════════════════════════════════════════════════════
+// PROPERTY MANAGEMENT
+// ═══════════════════════════════════════════════════════
+
+// Get all properties with full details
+app.get("/api/properties/all", (req, res) => {
+  const db = getDb();
+  const props = db.prepare("SELECT * FROM properties ORDER BY name").all();
+  // Extract city/state from bw_data if not set
+  const result = props.map(p => {
+    let bw = {};
+    try { bw = JSON.parse(p.bw_data || '{}'); } catch(e) {}
+    return {
+      ...p,
+      city: p.city || bw.city || '',
+      state: p.state || bw.state || '',
+      beds: p.beds || bw.bedrooms || 0,
+      baths: p.baths || bw.bathrooms || 0,
+      address: p.address || bw.address1 || '',
+      bw_data: undefined // don't send full JSON to frontend
+    };
+  });
+  res.json(result);
+});
+
+// Update property details
+app.post("/api/properties/:id/update", (req, res) => {
+  const db = getDb();
+  const p = req.body;
+  db.prepare(`UPDATE properties SET 
+    region=?, city=?, state=?, beds=?, baths=?, owner_manager=?, standard_rate=?, deep_clean_rate=?, rate=?, updated_at=datetime('now')
+    WHERE id = ?`
+  ).run(p.region||'', p.city||'', p.state||'', p.beds||0, p.baths||0, p.owner_manager||'', p.standard_rate||0, p.deep_clean_rate||0, p.standard_rate||0, req.params.id);
+  res.json({ ok: true });
+});
+
+// Add a new property manually (not from Breezeway)
+app.post("/api/properties/add", (req, res) => {
+  const db = getDb();
+  const p = req.body;
+  const id = "prop" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  db.prepare(`INSERT INTO properties (id, name, address, group_name, beds, baths, rate, region, city, state, owner_manager, standard_rate, deep_clean_rate, bw_data, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '{}', datetime('now'))`
+  ).run(id, p.name||'', p.address||'', p.group_name||'', p.beds||0, p.baths||0, p.standard_rate||0, p.region||'', p.city||'', p.state||'', p.owner_manager||'', p.standard_rate||0, p.deep_clean_rate||0);
+  res.json({ id });
 });
 
 // ═══════════════════════════════════════════════════════
