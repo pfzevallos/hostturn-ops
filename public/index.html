@@ -79,6 +79,7 @@
       <div class="stat"><div class="label">Completed</div><div class="value green" id="s-done">-</div></div>
     </div>
     <div class="tabs">
+      <div class="tab" id="tab-yesterday" onclick="switchTab('yesterday')">Yesterday <span class="count" id="count-yesterday">—</span></div>
       <div class="tab active" id="tab-today" onclick="switchTab('today')">Today <span class="count" id="count-today">—</span></div>
       <div class="tab" id="tab-tomorrow" onclick="switchTab('tomorrow')">Tomorrow <span class="count" id="count-tomorrow">—</span></div>
       <div class="tab" id="tab-dayafter" onclick="switchTab('dayafter')">Day After <span class="count" id="count-dayafter">—</span></div>
@@ -368,16 +369,19 @@
       return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {weekday:'long', month:'long', day:'numeric', year:'numeric'});
     }
 
+    var yesterdayDate = getLocalDate(-1);
     var todayDate = getLocalDate(0);
     var tomorrowDate = getLocalDate(1);
     var dayAfterDate = getLocalDate(2);
     var currentTab = 'today';
+    var yesterdayJobs = [];
     var todayJobs = [];
     var tomorrowJobs = [];
     var dayAfterJobs = [];
 
     function switchTab(tab) {
       currentTab = tab;
+      document.getElementById('tab-yesterday').className = tab === 'yesterday' ? 'tab active' : 'tab';
       document.getElementById('tab-today').className = tab === 'today' ? 'tab active' : 'tab';
       document.getElementById('tab-tomorrow').className = tab === 'tomorrow' ? 'tab active' : 'tab';
       document.getElementById('tab-dayafter').className = tab === 'dayafter' ? 'tab active' : 'tab';
@@ -386,7 +390,7 @@
       document.getElementById('tab-homes').className = tab === 'homes' ? 'tab active' : 'tab';
       
       // Show/hide sections
-      var isOps = (tab === 'today' || tab === 'tomorrow' || tab === 'dayafter');
+      var isOps = (tab === 'yesterday' || tab === 'today' || tab === 'tomorrow' || tab === 'dayafter');
       document.getElementById('jobs').style.display = isOps ? 'block' : 'none';
       document.getElementById('payments-section').style.display = tab === 'payments' ? 'block' : 'none';
       document.getElementById('calculator-section').style.display = tab === 'calculator' ? 'block' : 'none';
@@ -406,14 +410,14 @@
         return;
       }
       var isFuture = (tab === 'tomorrow' || tab === 'dayafter');
-      var schedDate = tab === 'today' ? todayDate : tab === 'tomorrow' ? tomorrowDate : dayAfterDate;
-      var schedTitle = tab === 'today' ? "Today's Schedule" : tab === 'tomorrow' ? "Tomorrow's Schedule" : "Day After Tomorrow";
+      var schedDate = tab === 'yesterday' ? yesterdayDate : tab === 'today' ? todayDate : tab === 'tomorrow' ? tomorrowDate : dayAfterDate;
+      var schedTitle = tab === 'yesterday' ? "Yesterday's Schedule" : tab === 'today' ? "Today's Schedule" : tab === 'tomorrow' ? "Tomorrow's Schedule" : "Day After Tomorrow";
       document.getElementById('schedule-title').textContent = schedTitle;
       document.getElementById('display-date').textContent = formatDate(schedDate);
       document.getElementById('send-btn').style.display = isFuture ? 'inline-flex' : 'none';
       document.getElementById('owner-btn').style.display = isFuture ? 'inline-flex' : 'none';
       // Show close-out button if there are finished jobs without close-out emails
-      var activeJobs = tab === 'today' ? todayJobs : tab === 'tomorrow' ? tomorrowJobs : dayAfterJobs;
+      var activeJobs = tab === 'yesterday' ? yesterdayJobs : tab === 'today' ? todayJobs : tab === 'tomorrow' ? tomorrowJobs : dayAfterJobs;
       var pendingCloseouts = activeJobs.filter(function(j) {
         var s = (j.bw_status || '').toLowerCase();
         return (s === 'finished' || s === 'closed' || s === 'completed') && !j.closeout_email_sent_at;
@@ -471,10 +475,10 @@
     }
 
     function renderJobs() {
-      var jobs = currentTab === 'today' ? todayJobs : currentTab === 'tomorrow' ? tomorrowJobs : dayAfterJobs;
+      var jobs = currentTab === 'yesterday' ? yesterdayJobs : currentTab === 'today' ? todayJobs : currentTab === 'tomorrow' ? tomorrowJobs : dayAfterJobs;
       var el = document.getElementById('jobs');
       if (!jobs.length) {
-        var label = currentTab === 'today' ? 'today' : currentTab === 'tomorrow' ? 'tomorrow' : 'the day after tomorrow';
+        var label = currentTab === 'yesterday' ? 'yesterday' : currentTab === 'today' ? 'today' : currentTab === 'tomorrow' ? 'tomorrow' : 'the day after tomorrow';
         el.innerHTML = '<div class="empty"><div class="icon">📋</div><p>No jobs scheduled for ' + label + '.<br>Click "Sync Breezeway" to pull tasks.</p></div>';
         return;
       }
@@ -498,9 +502,9 @@
         if (j.closeout_email_sent_at) {
           ownerStatus += '<span style="font-size:11px;color:var(--accent);margin-left:4px">💰 Invoice Sent</span>';
         }
-        // Progress checkboxes and report link (Today tab only)
+        // Progress checkboxes and report link (Yesterday and Today tabs)
         var progressHtml = '';
-        if (currentTab === 'today') {
+        if (currentTab === 'today' || currentTab === 'yesterday') {
           var arrChecked = j.arrival_confirmed_at ? 'checked' : '';
           var rptChecked = j.report_verified_at ? 'checked' : '';
           var reportLink = j.bw_report_url 
@@ -526,19 +530,22 @@
     async function loadAllJobs() {
       try {
         var results = await Promise.all([
+          fetch('/api/jobs?date=' + yesterdayDate).then(function(r){return r.json()}),
           fetch('/api/jobs?date=' + todayDate).then(function(r){return r.json()}),
           fetch('/api/jobs?date=' + tomorrowDate).then(function(r){return r.json()}),
           fetch('/api/jobs?date=' + dayAfterDate).then(function(r){return r.json()})
         ]);
-        todayJobs = results[0];
-        tomorrowJobs = results[1];
-        dayAfterJobs = results[2];
+        yesterdayJobs = results[0];
+        todayJobs = results[1];
+        tomorrowJobs = results[2];
+        dayAfterJobs = results[3];
         var cleaners = [];
         todayJobs.forEach(function(j){ if(j.cleaner_name && cleaners.indexOf(j.cleaner_name)===-1) cleaners.push(j.cleaner_name); });
         var done = todayJobs.filter(function(j){ var s=(j.bw_status||'').toLowerCase(); return s==='completed'||s==='finished'||s==='closed'; }).length;
         document.getElementById('s-jobs').textContent = todayJobs.length;
         document.getElementById('s-done').textContent = done + '/' + todayJobs.length;
         document.getElementById('s-cleaners').textContent = cleaners.length;
+        document.getElementById('count-yesterday').textContent = yesterdayJobs.length;
         document.getElementById('count-today').textContent = todayJobs.length;
         document.getElementById('count-tomorrow').textContent = tomorrowJobs.length;
         document.getElementById('count-dayafter').textContent = dayAfterJobs.length;
@@ -567,11 +574,12 @@
       try {
         await fetch('/api/sync/properties', {method:'POST'});
         var results = await Promise.all([
+          fetch('/api/sync/tasks', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:yesterdayDate})}).then(function(r){return r.json()}),
           fetch('/api/sync/tasks', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:todayDate})}).then(function(r){return r.json()}),
           fetch('/api/sync/tasks', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:tomorrowDate})}).then(function(r){return r.json()}),
           fetch('/api/sync/tasks', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:dayAfterDate})}).then(function(r){return r.json()})
         ]);
-        btn.textContent = 'Synced: ' + results[0].count + '/' + results[1].count + '/' + results[2].count;
+        btn.textContent = 'Synced: ' + results[0].count + '/' + results[1].count + '/' + results[2].count + '/' + results[3].count;
         setTimeout(function(){ btn.textContent = 'Sync Breezeway'; btn.disabled = false; }, 3000);
         loadAllJobs();
       } catch(e) {
@@ -646,8 +654,8 @@
     }
 
     async function sendCloseouts() {
-      var date = currentTab === 'today' ? todayDate : currentTab === 'tomorrow' ? tomorrowDate : dayAfterDate;
-      var jobs = currentTab === 'today' ? todayJobs : currentTab === 'tomorrow' ? tomorrowJobs : dayAfterJobs;
+      var date = currentTab === 'yesterday' ? yesterdayDate : currentTab === 'today' ? todayDate : currentTab === 'tomorrow' ? tomorrowDate : dayAfterDate;
+      var jobs = currentTab === 'yesterday' ? yesterdayJobs : currentTab === 'today' ? todayJobs : currentTab === 'tomorrow' ? tomorrowJobs : dayAfterJobs;
       var finishedJobs = jobs.filter(function(j) {
         var s = (j.bw_status || '').toLowerCase();
         return (s === 'finished' || s === 'closed' || s === 'completed') && !j.closeout_email_sent_at;
