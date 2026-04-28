@@ -572,13 +572,14 @@ app.post("/api/send-owner-notifications", async (req, res) => {
         continue;
       }
       
-      // Match owner to property using the properties field
+      // Match owner to property using the properties field (check both property name and group name)
       let owner = null;
       for (const o of owners) {
         if (!o.properties) continue;
         const keywords = o.properties.split(",").map(function(k) { return k.trim().toLowerCase(); });
         const propLower = job.property_name.toLowerCase();
-        if (keywords.some(function(k) { return propLower.includes(k); })) {
+        const groupLower = (job.group_name || "").toLowerCase();
+        if (keywords.some(function(k) { return propLower.includes(k) || groupLower.includes(k); })) {
           owner = o;
           break;
         }
@@ -707,7 +708,8 @@ app.post("/api/send-closeout-email", async (req, res) => {
       if (!o.properties) continue;
       const keywords = o.properties.split(",").map(function(k) { return k.trim().toLowerCase(); });
       const propLower = job.property_name.toLowerCase();
-      if (keywords.some(function(k) { return propLower.includes(k); })) {
+      const groupLower = (job.group_name || "").toLowerCase();
+      if (keywords.some(function(k) { return propLower.includes(k) || groupLower.includes(k); })) {
         owner = o;
         break;
       }
@@ -806,7 +808,8 @@ app.post("/api/send-closeout-emails-batch", async (req, res) => {
           if (!o.properties) continue;
           const keywords = o.properties.split(",").map(function(k) { return k.trim().toLowerCase(); });
           const propLower = job.property_name.toLowerCase();
-          if (keywords.some(function(k) { return propLower.includes(k); })) { owner = o; break; }
+          const groupLower = (job.group_name || "").toLowerCase();
+          if (keywords.some(function(k) { return propLower.includes(k) || groupLower.includes(k); })) { owner = o; break; }
         }
         
         if (!owner || !owner.email) {
