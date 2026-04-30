@@ -223,7 +223,9 @@ async function syncTasksForDate(date) {
         }
       }
       const typeStatus = typeof t.type_task_status === 'string' ? JSON.parse(t.type_task_status || '{}') : (t.type_task_status || {});
-      const status = typeStatus.name || typeStatus.code || t.status?.name || t.status?.code || "";
+      const rawStatus = typeStatus.name || typeStatus.code || t.status?.name || t.status?.code || "";
+      // Preserve existing status if new status is empty (Breezeway sometimes returns no status for finished tasks)
+      const status = rawStatus || existing?.bw_status || "";
       const startedAt = t.started_at || existing?.bw_started_at || null;
       const completedAt = t.finished_at || t.completed_at || existing?.bw_completed_at || null;
       const desc = t.description || existing?.task_notes || "";
