@@ -276,9 +276,10 @@ app.get("/api/payment-tracker", (req, res) => {
   const ADMIN_NAMES = ["pedro zevallos", "lizzy zevallos"];
   const finished = jobs.filter(j => {
     const isFinished = ['finished','closed','completed'].includes((j.bw_status||'').toLowerCase());
+    const hasPaymentData = j.closeout_email_sent_at || j.owner_paid_at || j.cleaner_paid_at;
     const cleanerNorm = (j.cleaner_name||'').toLowerCase().replace(/\s+/g, ' ').trim();
     const isAdmin = ADMIN_NAMES.some(a => cleanerNorm.includes(a));
-    return isFinished && !isAdmin;
+    return (isFinished || hasPaymentData) && !isAdmin;
   });
   const totalOwnerRevenue = finished.reduce((s,j) => s + (j.rate || 0), 0);
   const totalOwnerPaid = finished.filter(j => j.owner_paid_at).reduce((s,j) => s + (j.rate || 0), 0);
