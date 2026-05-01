@@ -761,7 +761,7 @@
         // Cleaner info - Joe Anderson is hourly, not flat rate
         var cleanerName = j.cleaner_name || '-';
         var cleanerNorm = (j.cleaner_name || '').toLowerCase().replace(/\s+/g, ' ').trim();
-        var isHourly = cleanerNorm === 'joe anderson' || cleanerNorm.includes('carlos beb');
+        var isHourly = cleanerNorm === 'joe anderson' || cleanerNorm.includes('carlos beb') || cleanerNorm.includes('ines machala');
         var cleanerRate = isHourly ? '<span style="color:var(--text2);font-style:italic">Hourly</span>' : (j.cleaner_rate > 0 ? '$' + j.cleaner_rate.toFixed(0) : '-');
         
         // Cleaner payment - show Paid/Unpaid button for hourly cleaners too
