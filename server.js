@@ -1,1066 +1,1154 @@
-require("dotenv").config();
-const express = require("express");
-const cors = require("cors");
-const cron = require("node-cron");
-const path = require("path");
-const { getDb } = require("./db");
-const bw = require("./breezeway");
-const sms = require("./sms");
-const auto = require("./automation");
-const closeout = require("./closeout");
-
-const app = express();
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// Serve dashboard
-app.use(express.static(path.join(__dirname, "public")));
-
-
-// Gmail email helper - uses nodemailer with connection pooling and timeout
-async function sendEmail({ to, cc, subject, text, html }) {
-  const nodemailer = require("nodemailer");
-  const transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 465,
-    secure: true,
-    auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD },
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000
-  });
-  return transporter.sendMail({
-    from: `"HostTurn" <${process.env.GMAIL_USER}>`,
-    to,
-    cc,
-    subject,
-    text,
-    html
-  });
-}
-
-const PORT = process.env.PORT || 3000;
-
-// ═══════════════════════════════════════════════════════
-// API ROUTES — Dashboard
-// ═══════════════════════════════════════════════════════
-
-// --- Jobs ---
-app.get("/api/jobs", (req, res) => {
-  const db = getDb();
-  const date = req.query.date || new Date().toISOString().split("T")[0];
-  const jobs = db.prepare("SELECT * FROM jobs WHERE date = ? ORDER BY expected_arrival").all(date);
-  // Attach steps
-  for (const job of jobs) {
-    job.steps = {};
-    const steps = db.prepare("SELECT step_key, status, sent_at FROM job_steps WHERE job_id = ?").all(job.id);
-    for (const s of steps) job.steps[s.step_key] = { status: s.status, sent_at: s.sent_at };
-  }
-  res.json(jobs);
-});
-
-app.post("/api/jobs", (req, res) => {
-  const db = getDb();
-  const { date, property_name, group_name, cleaner_name, checkout_time, expected_arrival, finish_by, rate, task_notes, is_checkout_day } = req.body;
-  const id = "j" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-  const ea = expected_arrival || (is_checkout_day === false ? "09:00" : "10:00");
-  db.prepare(`INSERT INTO jobs (id, date, property_name, group_name, cleaner_name, checkout_time, expected_arrival, finish_by, rate, task_notes, is_checkout_day)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(id, date, property_name, group_name, cleaner_name, checkout_time, ea, finish_by, rate, task_notes, is_checkout_day ? 1 : 0);
-  const STEPS = ["owner_confirm","cleaner_sched","morning","arrival","progress","end_verify","finishing","close_out"];
-  for (const sk of STEPS) {
-    db.prepare("INSERT OR IGNORE INTO job_steps (id, job_id, step_key, status) VALUES (?, ?, ?, 'pending')").run(id+"_"+sk, id, sk);
-  }
-  res.json({ id });
-});
-
-app.patch("/api/jobs/:id", (req, res) => {
-  const db = getDb();
-  const fields = req.body;
-  const sets = Object.keys(fields).map(k => `${k} = ?`).join(", ");
-  const vals = Object.values(fields);
-  db.prepare(`UPDATE jobs SET ${sets}, updated_at = datetime('now') WHERE id = ?`).run(...vals, req.params.id);
-  res.json({ ok: true });
-});
-
-app.delete("/api/jobs/:id", (req, res) => {
-  const db = getDb();
-  db.prepare("DELETE FROM job_steps WHERE job_id = ?").run(req.params.id);
-  db.prepare("DELETE FROM jobs WHERE id = ?").run(req.params.id);
-  res.json({ ok: true });
-});
-
-// --- Send message for a specific step ---
-app.post("/api/jobs/:id/send/:step", async (req, res) => {
-  try {
-    const db = getDb();
-    const job = db.prepare("SELECT * FROM jobs WHERE id = ?").get(req.params.id);
-    if (!job) return res.status(404).json({ error: "Job not found" });
-    const result = await sms.sendStepMessage(req.params.step, job, req.body.extras);
-    res.json(result);
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// --- Bulk send a step for all pending jobs on a date ---
-app.post("/api/bulk-send/:step", async (req, res) => {
-  try {
-    const db = getDb();
-    const date = req.body.date || new Date().toISOString().split("T")[0];
-    const jobs = db.prepare("SELECT j.* FROM jobs j JOIN job_steps js ON j.id = js.job_id WHERE j.date = ? AND js.step_key = ? AND js.status = 'pending'")
-      .all(date, req.params.step);
-    let sent = 0;
-    for (const job of jobs) {
-      const result = await sms.sendStepMessage(req.params.step, job);
-      if (result?.success) sent++;
-      await new Promise(r => setTimeout(r, 500)); // Rate limit
-    }
-    res.json({ sent, total: jobs.length });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// --- Contacts ---
-app.get("/api/contacts", (req, res) => {
-  res.json(getDb().prepare("SELECT * FROM contacts ORDER BY role, name").all());
-});
-
-app.post("/api/contacts", (req, res) => {
-  const db = getDb();
-  const { name, phone, email, role, lang, properties, notes } = req.body;
-  const id = "c" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-  db.prepare("INSERT INTO contacts (id, name, phone, email, role, lang, properties, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-    .run(id, name, phone, email, role || "cleaner", lang || "en", properties, notes);
-  res.json({ id });
-});
-
-app.patch("/api/contacts/:id", (req, res) => {
-  const db = getDb();
-  const fields = req.body;
-  const sets = Object.keys(fields).map(k => `${k} = ?`).join(", ");
-  db.prepare(`UPDATE contacts SET ${sets} WHERE id = ?`).run(...Object.values(fields), req.params.id);
-  res.json({ ok: true });
-});
-
-app.delete("/api/contacts/:id", (req, res) => {
-  getDb().prepare("DELETE FROM contacts WHERE id = ?").run(req.params.id);
-  res.json({ ok: true });
-});
-
-// --- Templates ---
-app.get("/api/templates", (req, res) => {
-  res.json(getDb().prepare("SELECT * FROM templates").all());
-});
-
-app.put("/api/templates/:step/:lang", (req, res) => {
-  getDb().prepare("INSERT OR REPLACE INTO templates (step_key, lang, body) VALUES (?, ?, ?)")
-    .run(req.params.step, req.params.lang, req.body.body);
-  res.json({ ok: true });
-});
-
-// --- Messages log ---
-app.get("/api/messages", (req, res) => {
-  const date = req.query.date || new Date().toISOString().split("T")[0];
-  res.json(getDb().prepare("SELECT * FROM messages WHERE created_at LIKE ? ORDER BY created_at DESC").all(date + "%"));
-});
-
-app.get("/api/messages/escalations", (req, res) => {
-  res.json(getDb().prepare("SELECT * FROM messages WHERE is_escalation = 1 AND is_resolved = 0 ORDER BY created_at DESC").all());
-});
-
-app.patch("/api/messages/:id/resolve", (req, res) => {
-  getDb().prepare("UPDATE messages SET is_resolved = 1 WHERE id = ?").run(req.params.id);
-  res.json({ ok: true });
-});
-
-// --- Payments ---
-app.get("/api/payments", (req, res) => {
-  const date = req.query.date || new Date().toISOString().split("T")[0];
-  res.json(getDb().prepare("SELECT * FROM payments WHERE date = ? ORDER BY property_name").all(date));
-});
-
-app.patch("/api/payments/:id", (req, res) => {
-  const fields = req.body;
-  const sets = Object.keys(fields).map(k => `${k} = ?`).join(", ");
-  getDb().prepare(`UPDATE payments SET ${sets}, updated_at = datetime('now') WHERE id = ?`).run(...Object.values(fields), req.params.id);
-  res.json({ ok: true });
-});
-
-// --- Breezeway sync ---
-
-// --- Close-Out Workflow ---
-app.post("/api/jobs/:id/close-out", async (req, res) => {
-  try {
-    const db = getDb();
-    const job = db.prepare("SELECT * FROM jobs WHERE id = ?").get(req.params.id);
-    if (!job) return res.status(404).json({ error: "Job not found" });
-    const result = await closeout.runCloseOut(job);
-    res.json(result);
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// Send just the completion email (without full close-out)
-app.post("/api/jobs/:id/send-completion-email", async (req, res) => {
-  try {
-    const db = getDb();
-    const job = db.prepare("SELECT * FROM jobs WHERE id = ?").get(req.params.id);
-    if (!job) return res.status(404).json({ error: "Job not found" });
-    const photos = job.bw_task_id ? await closeout.getTaskPhotos(job.bw_task_id) : [];
-    const result = await closeout.sendCompletionEmail(job, photos);
-    res.json(result);
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// Send just the completion text
-app.post("/api/jobs/:id/send-completion-text", async (req, res) => {
-  try {
-    const db = getDb();
-    const job = db.prepare("SELECT * FROM jobs WHERE id = ?").get(req.params.id);
-    if (!job) return res.status(404).json({ error: "Job not found" });
-    const result = await closeout.sendCompletionText(job);
-    res.json(result);
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// Mark payment received from owner
-app.post("/api/payments/:jobId/received", (req, res) => {
-  getDb().prepare("UPDATE jobs SET owner_paid_at = datetime('now') WHERE id = ?").run(req.params.jobId);
-  res.json({ ok: true });
-});
-
-// Mark cleaner paid
-app.post("/api/payments/:jobId/cleaner-paid", (req, res) => {
-  getDb().prepare("UPDATE jobs SET cleaner_paid_at = datetime('now') WHERE id = ?").run(req.params.jobId);
-  res.json({ ok: true });
-});
-
-// Undo owner payment
-app.post("/api/payments/:jobId/undo-received", (req, res) => {
-  getDb().prepare("UPDATE jobs SET owner_paid_at = NULL WHERE id = ?").run(req.params.jobId);
-  res.json({ ok: true });
-});
-
-// Undo cleaner payment
-app.post("/api/payments/:jobId/undo-cleaner-paid", (req, res) => {
-  getDb().prepare("UPDATE jobs SET cleaner_paid_at = NULL WHERE id = ?").run(req.params.jobId);
-  res.json({ ok: true });
-});
-
-// Update job rate manually
-app.post("/api/jobs/:jobId/set-rate", (req, res) => {
-  const db = getDb();
-  const rate = parseFloat(req.body.rate) || 0;
-  db.prepare("UPDATE jobs SET rate = ? WHERE id = ?").run(rate, req.params.jobId);
-  res.json({ ok: true, rate });
-});
-
-// Update job cleaner_rate manually
-app.post("/api/jobs/:jobId/set-cleaner-rate", (req, res) => {
-  const db = getDb();
-  const rate = parseFloat(req.body.rate) || 0;
-  db.prepare("UPDATE jobs SET cleaner_rate = ? WHERE id = ?").run(rate, req.params.jobId);
-  res.json({ ok: true, rate });
-});
-
-// Get payment tracker data (all finished jobs with payment status)
-app.get("/api/payment-tracker", (req, res) => {
-  const db = getDb();
-  const startDate = req.query.start || "2026-01-01";
-  const endDate = req.query.end || "2099-12-31";
-  const jobs = db.prepare(`
-    SELECT * FROM jobs 
-    WHERE date >= ? AND date <= ? 
-    AND (bw_status IN ('Finished','Closed','Completed','In Progress','Created') OR bw_status IS NOT NULL)
-    ORDER BY date DESC, property_name
-  `).all(startDate, endDate);
-  
-  // Filter out admin jobs (Pedro/Lizzy are company owners, not cleaners)
-  const ADMIN_NAMES = ["pedro zevallos", "lizzy zevallos"];
-  const finished = jobs.filter(j => {
-    const isFinished = ['finished','closed','completed'].includes((j.bw_status||'').toLowerCase());
-    const hasPaymentData = j.closeout_email_sent_at || j.owner_paid_at || j.cleaner_paid_at;
-    const cleanerNorm = (j.cleaner_name||'').toLowerCase().replace(/\s+/g, ' ').trim();
-    const isAdmin = ADMIN_NAMES.some(a => cleanerNorm.includes(a));
-    return (isFinished || hasPaymentData) && !isAdmin;
-  });
-  const totalOwnerRevenue = finished.reduce((s,j) => s + (j.rate || 0), 0);
-  const totalOwnerPaid = finished.filter(j => j.owner_paid_at).reduce((s,j) => s + (j.rate || 0), 0);
-  const totalOwnerOpen = totalOwnerRevenue - totalOwnerPaid;
-  const totalCleanerCost = finished.reduce((s,j) => s + (j.cleaner_rate || 0), 0);
-  const totalCleanerPaid = finished.filter(j => j.cleaner_paid_at).reduce((s,j) => s + (j.cleaner_rate || 0), 0);
-  const totalCleanerOwed = totalCleanerCost - totalCleanerPaid;
-  
-  res.json({ 
-    jobs: finished, 
-    summary: { totalOwnerRevenue, totalOwnerPaid, totalOwnerOpen, totalCleanerCost, totalCleanerPaid, totalCleanerOwed, profit: totalOwnerRevenue - totalCleanerCost }
-  });
-});
-
-// Toggle owner paid/unpaid
-app.post("/api/tracker/:jobId/owner-paid", (req, res) => {
-  getDb().prepare("UPDATE jobs SET owner_paid_at = datetime('now') WHERE id = ?").run(req.params.jobId);
-  getDb().prepare("INSERT INTO auto_log (event, job_id, detail) VALUES (?, ?, ?)").run("owner_paid", req.params.jobId, "Owner payment marked as received");
-  res.json({ ok: true });
-});
-app.post("/api/tracker/:jobId/owner-unpaid", (req, res) => {
-  getDb().prepare("UPDATE jobs SET owner_paid_at = NULL WHERE id = ?").run(req.params.jobId);
-  res.json({ ok: true });
-});
-
-// Toggle cleaner paid/unpaid
-app.post("/api/tracker/:jobId/cleaner-paid", (req, res) => {
-  getDb().prepare("UPDATE jobs SET cleaner_paid_at = datetime('now') WHERE id = ?").run(req.params.jobId);
-  getDb().prepare("INSERT INTO auto_log (event, job_id, detail) VALUES (?, ?, ?)").run("cleaner_paid", req.params.jobId, "Cleaner marked as paid");
-  res.json({ ok: true });
-});
-app.post("/api/tracker/:jobId/cleaner-unpaid", (req, res) => {
-  getDb().prepare("UPDATE jobs SET cleaner_paid_at = NULL WHERE id = ?").run(req.params.jobId);
-  res.json({ ok: true });
-});
-
-// Toggle arrival confirmed
-app.post("/api/jobs/:jobId/arrival-confirmed", (req, res) => {
-  const db = getDb();
-  const job = db.prepare("SELECT arrival_confirmed_at FROM jobs WHERE id = ?").get(req.params.jobId);
-  if (job && job.arrival_confirmed_at) {
-    db.prepare("UPDATE jobs SET arrival_confirmed_at = NULL WHERE id = ?").run(req.params.jobId);
-  } else {
-    db.prepare("UPDATE jobs SET arrival_confirmed_at = datetime('now') WHERE id = ?").run(req.params.jobId);
-  }
-  res.json({ ok: true });
-});
-
-// Toggle report verified
-app.post("/api/jobs/:jobId/report-verified", (req, res) => {
-  const db = getDb();
-  const job = db.prepare("SELECT report_verified_at FROM jobs WHERE id = ?").get(req.params.jobId);
-  if (job && job.report_verified_at) {
-    db.prepare("UPDATE jobs SET report_verified_at = NULL WHERE id = ?").run(req.params.jobId);
-  } else {
-    db.prepare("UPDATE jobs SET report_verified_at = datetime('now') WHERE id = ?").run(req.params.jobId);
-  }
-  res.json({ ok: true });
-});
-
-// ═══════════════════════════════════════════════════════
-// PROPERTY MANAGEMENT (Homes)
-// ═══════════════════════════════════════════════════════
-
-// Get all properties with enhanced fields
-app.get("/api/properties/all", (req, res) => {
-  const db = getDb();
-  const props = db.prepare("SELECT * FROM properties ORDER BY region, name").all();
-  res.json(props);
-});
-
-// Update property details
-app.post("/api/properties/:id/update", (req, res) => {
-  const db = getDb();
-  const p = req.body;
-  db.prepare(`UPDATE properties SET 
-    name=?, address=?, beds=?, baths=?, rate=?, deep_clean_rate=?,
-    region=?, city=?, state=?, owner_manager=?, updated_at=datetime('now')
-    WHERE id = ?`).run(
-    p.name||'', p.address||'', p.beds||0, p.baths||0, p.rate||0, p.deep_clean_rate||0,
-    p.region||'', p.city||'', p.state||'', p.owner_manager||'', req.params.id
-  );
-  res.json({ ok: true });
-});
-
-// Add a new manually-created property
-app.post("/api/properties/add", (req, res) => {
-  const db = getDb();
-  const p = req.body;
-  const id = "mp" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-  db.prepare(`INSERT INTO properties (id, name, address, beds, baths, rate, deep_clean_rate,
-    region, city, state, owner_manager, group_name, is_manual, bw_data, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, '{}', datetime('now'))`).run(
-    id, p.name||'', p.address||'', p.beds||0, p.baths||0, p.rate||0, p.deep_clean_rate||0,
-    p.region||'', p.city||'', p.state||'', p.owner_manager||'', p.group_name||''
-  );
-  res.json({ id });
-});
-
-// Delete a manually-created property
-app.delete("/api/properties/:id", (req, res) => {
-  const db = getDb();
-  const prop = db.prepare("SELECT is_manual FROM properties WHERE id = ?").get(req.params.id);
-  if (prop && prop.is_manual) {
-    db.prepare("DELETE FROM properties WHERE id = ?").run(req.params.id);
-    res.json({ ok: true });
-  } else {
-    res.json({ ok: false, error: "Cannot delete Breezeway-synced properties" });
-  }
-});
-
-// --- Breezeway sync ---
-app.post("/api/sync/properties", async (req, res) => {
-  try { const data = await bw.syncProperties(); res.json({ count: data.length }); }
-  catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// Debug: see raw Breezeway property API response
-app.get("/api/debug/bw-properties", async (req, res) => {
-  try {
-    const data = await bw.bwFetch("/property");
-    const isArr = Array.isArray(data);
-    const keys = isArr ? ["(array)"] : Object.keys(data || {});
-    const count = isArr ? data.length : (data.results?.length || data.data?.length || "unknown");
-    const sample = isArr ? data[0] : (data.results?.[0] || data.data?.[0] || data[Object.keys(data)[0]]);
-    res.json({ isArray: isArr, topLevelKeys: keys, count, sampleKeys: sample ? Object.keys(sample) : [], sample: sample ? JSON.stringify(sample).substring(0, 500) : null });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// Get property count from local DB
-app.get("/api/properties/count", (req, res) => {
-  const db = getDb();
-  const count = db.prepare("SELECT COUNT(*) as c FROM properties").get();
-  res.json({ count: count.c });
-});
-
-// Update property rates by matching property name keywords
-app.post("/api/properties/set-rates", (req, res) => {
-  const db = getDb();
-  const rates = req.body.rates; // { "keyword": rate, ... }
-  if (!rates) return res.status(400).json({ error: "rates object required" });
-  
-  const props = db.prepare("SELECT * FROM properties").all();
-  let updated = 0;
-  
-  for (const [keyword, rate] of Object.entries(rates)) {
-    const kw = keyword.toLowerCase();
-    for (const p of props) {
-      if (p.name && p.name.toLowerCase().includes(kw)) {
-        db.prepare("UPDATE properties SET rate = ? WHERE id = ?").run(rate, p.id);
-        // Also update any existing jobs for this property
-        db.prepare("UPDATE jobs SET rate = ? WHERE property_id = ? AND rate = 0").run(rate, p.id);
-        updated++;
-      }
-    }
-  }
-  
-  res.json({ updated, total_properties: props.length });
-});
-
-app.post("/api/sync/tasks", async (req, res) => {
-  try {
-    const date = req.body.date || new Date().toISOString().split("T")[0];
-    const count = await bw.syncTasksForDate(date);
-    res.json({ count, date });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.post("/api/breezeway/subscribe-webhook", async (req, res) => {
-  try {
-    const url = `${process.env.BASE_URL}/webhook/breezeway`;
-    const result = await bw.subscribeWebhook(url);
-    res.json(result);
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// --- Send schedule to cleaners ---
-app.post("/api/send-schedule", async (req, res) => {
-  try {
-    const db = getDb();
-    const date = req.body.date;
-    if (!date) return res.status(400).json({ error: "date required" });
-    
-    // Get all jobs for the date
-    const jobs = db.prepare("SELECT * FROM jobs WHERE date = ? ORDER BY cleaner_name, expected_arrival").all(date);
-    if (!jobs.length) return res.json({ sent: 0, error: "No jobs for " + date });
-    
-    // Group by cleaner
-    const byClean = {};
-    for (const j of jobs) {
-      const name = j.cleaner_name || "Unassigned";
-      if (name === "Unassigned") continue;
-      if (!byClean[name]) byClean[name] = [];
-      byClean[name].push(j);
-    }
-    
-    // Get cleaner contacts
-    const contacts = db.prepare("SELECT * FROM contacts WHERE role = 'cleaner'").all();
-    const results = [];
-    
-    for (const [cleanerName, cleanerJobs] of Object.entries(byClean)) {
-      // Find contact - try exact match first, then partial
-      let contact = contacts.find(c => c.name === cleanerName);
-      if (!contact) contact = contacts.find(c => cleanerName.includes(c.name) || c.name.includes(cleanerName));
-      
-      if (!contact || !contact.phone) {
-        results.push({ cleaner: cleanerName, status: "no_phone", error: "No phone number found" });
-        continue;
-      }
-      
-      // Build schedule message with friendly greeting
-      const isSpanish = contact.lang === "es";
-      const dateStr = new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
-      
-      // Get first name (use nickname if available)
-      const nicknames = { "Byron Ramos": "David", "Magiber Duche": "Magiber", "Carlos Beb xol's Company": "Carlos" };
-      const firstName = nicknames[cleanerName] || cleanerName.split(" ")[0];
-      
-      // Time-appropriate greeting
-      const hour = new Date().getHours();
-      let greetEn, greetEs;
-      if (hour < 12) { greetEn = "Good morning"; greetEs = "Buenos días"; }
-      else if (hour < 18) { greetEn = "Good afternoon"; greetEs = "Buenas tardes"; }
-      else { greetEn = "Good evening"; greetEs = "Buenas noches"; }
-      
-      let msg;
-      if (isSpanish) {
-        const dateStrEs = new Date(date + "T12:00:00").toLocaleDateString("es", { weekday: "long", month: "short", day: "numeric" });
-        msg = `${greetEs} ${firstName}! Tu horario de HostTurn para ${dateStrEs}:\n\n`;
-        cleanerJobs.forEach((j, i) => {
-          msg += `${i + 1}. ${j.property_name}\n`;
-        });
-        msg += `\nTotal: ${cleanerJobs.length} trabajo(s). Confirma con SI. Gracias!`;
-      } else {
-        msg = `${greetEn} ${firstName}! Here's your HostTurn schedule for ${dateStr}:\n\n`;
-        cleanerJobs.forEach((j, i) => {
-          msg += `${i + 1}. ${j.property_name}\n`;
-        });
-        msg += `\nTotal: ${cleanerJobs.length} job(s). Reply YES to confirm. Thanks!`;
-      }
-      
-      try {
-        await sms.sendSMS(contact.phone, msg, null, "cleaner_sched", contact.lang || "en");
-        
-        // Send to secondary contacts (e.g., Ines gets Carlos's schedule too)
-        const SECONDARY_CONTACTS = {
-          "carlos beb": "+18454077055"  // Ines (Carlos's wife)
-        };
-        const cleanerLower = cleanerName.toLowerCase().replace(/\s+/g, ' ').trim();
-        for (const [key, secondaryPhone] of Object.entries(SECONDARY_CONTACTS)) {
-          if (cleanerLower.includes(key)) {
-            try {
-              await sms.sendSMS(secondaryPhone, msg, null, "cleaner_sched", contact.lang || "en");
-              console.log(`[SCHEDULE] Also sent to secondary contact ${secondaryPhone} for ${cleanerName}`);
-            } catch (e2) {
-              console.error(`[SCHEDULE] Failed to send to secondary ${secondaryPhone}:`, e2.message);
-            }
-          }
-        }
-        
-        // Mark all jobs for this cleaner as schedule sent
-        for (const j of cleanerJobs) {
-          db.prepare("UPDATE jobs SET schedule_sent_at = datetime('now') WHERE id = ?").run(j.id);
-        }
-        results.push({ cleaner: cleanerName, status: "sent", phone: contact.phone, jobs: cleanerJobs.length });
-      } catch (e) {
-        results.push({ cleaner: cleanerName, status: "error", error: e.message });
-      }
-    }
-    
-    res.json({ sent: results.filter(r => r.status === "sent").length, total: results.length, results });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// --- Send owner notifications for tomorrow's jobs ---
-app.post("/api/send-owner-notifications", async (req, res) => {
-  try {
-    const db = getDb();
-    const date = req.body.date;
-    if (!date) return res.status(400).json({ error: "date required" });
-    
-    const jobs = db.prepare("SELECT * FROM jobs WHERE date = ? ORDER BY property_name").all(date);
-    if (!jobs.length) return res.json({ sent: 0, error: "No jobs for " + date });
-    
-    const owners = db.prepare("SELECT * FROM contacts WHERE role = 'owner'").all();
-    const results = [];
-    
-    for (const job of jobs) {
-      if (job.owner_notified_at) {
-        results.push({ property: job.property_name, status: "already_sent" });
-        continue;
-      }
-      
-      // Match owner to property using the properties field (check both property name and group name)
-      let owner = null;
-      for (const o of owners) {
-        if (!o.properties) continue;
-        const keywords = o.properties.split(",").map(function(k) { return k.trim().toLowerCase(); });
-        const propLower = job.property_name.toLowerCase();
-        const groupLower = (job.group_name || "").toLowerCase();
-        if (keywords.some(function(k) { return propLower.includes(k) || groupLower.includes(k); })) {
-          owner = o;
-          break;
-        }
-      }
-      
-      if (!owner) {
-        results.push({ property: job.property_name, status: "no_owner", error: "No owner matched" });
-        continue;
-      }
-      
-      const checkoutTime = job.checkout_time || "10:00 AM";
-      const dateStr = new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
-      const propShort = job.property_name.split(" - ")[0];
-      
-      // Determine if the unit is already vacant by checking task notes and Breezeway task name
-      // Look for checkout dates in task_notes like "checkout March 15" or in the task name like "Out 3/15"
-      const notes = (job.task_notes || "").toLowerCase();
-      const taskName = (job.bw_task_name || "").toLowerCase();
-      const combined = notes + " " + taskName;
-      
-      // Try to detect if checkout was before the cleaning date
-      let isVacant = false;
-      // Match patterns like "out 3/15", "checkout march 15", "check out 3/15", "out 10am 3/15"
-      const datePatterns = combined.match(/(?:out|checkout|check out)[^0-9]*(\d{1,2})\/(\d{1,2})/i);
-      if (datePatterns) {
-        const checkoutMonth = parseInt(datePatterns[1]);
-        const checkoutDay = parseInt(datePatterns[2]);
-        const cleanMonth = parseInt(date.split("-")[1]);
-        const cleanDay = parseInt(date.split("-")[2]);
-        // If checkout date is before cleaning date, the unit is vacant
-        if (checkoutMonth < cleanMonth || (checkoutMonth === cleanMonth && checkoutDay < cleanDay)) {
-          isVacant = true;
-        }
-      }
-      // Also check task_notes for "checkout March 15" style dates
-      const monthNames = {"jan":1,"january":1,"feb":2,"february":2,"mar":3,"march":3,"apr":4,"april":4,"may":5,"jun":6,"june":6,"jul":7,"july":7,"aug":8,"august":8,"sep":9,"september":9,"oct":10,"october":10,"nov":11,"november":11,"dec":12,"december":12};
-      const monthPattern = combined.match(/checkout\s+(\w+)\s+(\d{1,2})/i);
-      if (monthPattern && monthNames[monthPattern[1].toLowerCase()]) {
-        const coMonth = monthNames[monthPattern[1].toLowerCase()];
-        const coDay = parseInt(monthPattern[2]);
-        const cleanMonth = parseInt(date.split("-")[1]);
-        const cleanDay = parseInt(date.split("-")[2]);
-        if (coMonth < cleanMonth || (coMonth === cleanMonth && coDay < cleanDay)) {
-          isVacant = true;
-        }
-      }
-      // If task name contains "STANDARD CLEAN" or "DEEP CLEAN" without a date, assume it could be vacant
-      if (/standard clean|deep clean|general clean/i.test(combined) && !datePatterns && !monthPattern) {
-        isVacant = true; // No checkout date found, likely a maintenance/vacant clean
-      }
-      
-      let emailSubject, emailText, emailHtml, smsMsg;
-      const firstName = owner.name.split(" ")[0];
-      
-      if (isVacant) {
-        // Vacant unit — simple notification, no ask for special instructions
-        emailSubject = `HostTurn Cleaning Scheduled - ${propShort} - ${dateStr}`;
-        emailText = `Hi ${firstName},\n\nJust a heads up — we have ${propShort} scheduled for cleaning on ${dateStr}.\n\nThank you!\nHostTurn Team\nhostturn.com`;
-        emailHtml = `<p>Hi ${firstName},</p><p>Just a heads up — we have <strong>${propShort}</strong> scheduled for cleaning on <strong>${dateStr}</strong>.</p><p>Thank you!<br>HostTurn Team<br><a href="https://hostturn.com">hostturn.com</a></p>`;
-        smsMsg = `HostTurn: Hi ${firstName}, just a heads up — we have ${propShort} scheduled for cleaning on ${dateStr}. Thank you!`;
-      } else {
-        // Same-day checkout — ask to confirm checkout time
-        emailSubject = `HostTurn Cleaning Scheduled - ${propShort} - ${dateStr}`;
-        emailText = `Hi ${firstName},\n\nWe have ${propShort} scheduled for cleaning on ${dateStr}.\n\nCan you please confirm the checkout time? If checkout is at ${checkoutTime}, no action needed.\n\nIf the checkout time is different, please reply to this email with the correct time.\n\nThank you!\nHostTurn Team\nhostturn.com`;
-        emailHtml = `<p>Hi ${firstName},</p><p>We have <strong>${propShort}</strong> scheduled for cleaning on <strong>${dateStr}</strong>.</p><p>Can you please confirm the checkout time? If checkout is at <strong>${checkoutTime}</strong>, no action needed.</p><p>If the checkout time is different, please reply to this email with the correct time.</p><p>Thank you!<br>HostTurn Team<br><a href="https://hostturn.com">hostturn.com</a></p>`;
-        smsMsg = `HostTurn: Hi ${firstName}, we have ${propShort} scheduled for cleaning on ${dateStr}. Can you confirm the checkout time? Reply with the time or YES if checkout is at ${checkoutTime}. Thank you!`;
-      }
-      
-      let sentVia = [];
-      
-      // Send email if owner has email
-      if (owner.email) {
-        try {
-          const ccList = [owner.cc_email, "lizzy@hostturn.com"].filter(Boolean).join(",");
-          await sendEmail({
-            to: owner.email,
-            cc: ccList,
-            subject: emailSubject,
-            text: emailText,
-            html: emailHtml
-          });
-          sentVia.push("email");
-        } catch (e) {
-          console.error(`[OWNER] Email failed for ${owner.name}:`, e.message);
-        }
-      }
-      
-      // Send SMS if owner has phone
-      if (owner.phone) {
-        try {
-          await sms.sendSMS(owner.phone, smsMsg, job.id, "owner_confirm", "en");
-          sentVia.push("sms");
-        } catch (e) {
-          console.error(`[OWNER] SMS failed for ${owner.name}:`, e.message);
-        }
-      }
-      
-      if (sentVia.length) {
-        db.prepare("UPDATE jobs SET owner_notified_at = datetime('now') WHERE id = ?").run(job.id);
-        db.prepare("INSERT INTO auto_log (event, job_id, detail) VALUES (?, ?, ?)")
-          .run("owner_notified", job.id, `Notified ${owner.name} via ${sentVia.join("+")} about ${job.property_name}`);
-        results.push({ property: job.property_name, owner: owner.name, status: "sent", via: sentVia });
-      } else {
-        results.push({ property: job.property_name, owner: owner.name, status: "no_contact", error: "No email or phone" });
-      }
-    }
-    
-    res.json({ sent: results.filter(function(r) { return r.status === "sent"; }).length, total: results.length, results });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// --- Send close-out / completion email to owner ---
-app.post("/api/send-closeout-email", async (req, res) => {
-  try {
-    const db = getDb();
-    const jobId = req.body.job_id;
-    if (!jobId) return res.status(400).json({ error: "job_id required" });
-    
-    const job = db.prepare("SELECT * FROM jobs WHERE id = ?").get(jobId);
-    if (!job) return res.status(404).json({ error: "Job not found" });
-    
-    // Match owner
-    const owners = db.prepare("SELECT * FROM contacts WHERE role = 'owner'").all();
-    let owner = null;
-    for (const o of owners) {
-      if (!o.properties) continue;
-      const keywords = o.properties.split(",").map(function(k) { return k.trim().toLowerCase(); });
-      const propLower = job.property_name.toLowerCase();
-      const groupLower = (job.group_name || "").toLowerCase();
-      if (keywords.some(function(k) { return propLower.includes(k) || groupLower.includes(k); })) {
-        owner = o;
-        break;
-      }
-    }
-    
-    if (!owner || !owner.email) {
-      return res.json({ status: "no_owner_email", error: "No owner email matched for " + job.property_name });
-    }
-    
-    const propShort = job.property_name.split(" - ")[0];
-    const dateStr = new Date(job.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
-    const rate = job.rate || 0;
-    const reportUrl = job.bw_report_url || null;
-    
-    const ccList = [owner.cc_email, "lizzy@hostturn.com"].filter(Boolean).join(",");
-    
-    let photosSection = "";
-    if (reportUrl) {
-      photosSection = `<p><strong>Completion Photos & Report:</strong><br><a href="${reportUrl}" style="color:#22c55e;font-weight:bold;">View Cleaning Report & Photos in Breezeway</a></p>`;
-    }
-    
-    let paymentHtml = "";
-    let paymentText = "";
-    if (rate > 0) {
-      paymentHtml = `
-          <p><strong>Cleaning Fee: $${rate.toFixed(2)}</strong></p>
-          <hr style="border:none;border-top:1px solid #ddd;margin:20px 0;">
-          <p><strong>Payment Options:</strong></p>
-          <p>
-            <strong>Zelle:</strong> pedro@hostturn.com<br>
-            <strong>Venmo:</strong> @Pedro-Zevallos
-          </p>
-          <p>Please remit payment at your earliest opportunity.</p>`;
-      paymentText = `\nCleaning Fee: $${rate.toFixed(2)}\n\nPayment Options:\nZelle: pedro@hostturn.com\nVenmo: @Pedro-Zevallos\n\nPlease remit payment at your earliest opportunity.`;
-    }
-    
-    const htmlBody = `
-      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
-        <div style="background:#1a1d27;padding:20px;border-radius:8px 8px 0 0;">
-          <h2 style="color:#22c55e;margin:0;">HostTurn — Cleaning Complete ✅</h2>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HostTurn Ops</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg:#0f1117; --surface:#1a1d27; --surface2:#232736; --border:#2e3348; --text:#e4e6f0; --text2:#8b8fa8; --accent:#22c55e; --accent2:#16a34a; --warn:#f59e0b; --danger:#ef4444; --blue:#3b82f6; }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+    .header { background:var(--surface); border-bottom:1px solid var(--border); padding:16px 24px; display:flex; align-items:center; justify-content:space-between; }
+    .header h1 { font-size:20px; font-weight:700; letter-spacing:-0.5px; }
+    .header h1 span { color:var(--accent); }
+    .header .status { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text2); }
+    .header .dot { width:8px; height:8px; border-radius:50%; background:var(--accent); animation:pulse 2s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    .container { max-width:1200px; margin:0 auto; padding:24px; }
+    .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px; }
+    .stat { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; }
+    .stat .label { font-size:12px; color:var(--text2); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; }
+    .stat .value { font-size:28px; font-weight:700; font-family:'JetBrains Mono',monospace; }
+    .stat .value.green { color:var(--accent); }
+    .stat .value.blue { color:var(--blue); }
+    .tabs { display:flex; gap:4px; margin-bottom:20px; }
+    .tab { padding:10px 20px; border-radius:8px; font-weight:600; font-size:14px; cursor:pointer; color:var(--text2); background:var(--surface); border:1px solid var(--border); transition:all 0.2s; }
+    .tab:hover { color:var(--text); border-color:var(--text2); }
+    .tab.active { background:var(--accent); color:#000; border-color:var(--accent); }
+    .tab .count { font-family:'JetBrains Mono',monospace; font-size:12px; margin-left:6px; opacity:0.7; }
+    .section-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:8px; }
+    .section-header h2 { font-size:16px; font-weight:600; }
+    .section-header .date { font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--text2); margin-right:12px; }
+    .btn { background:var(--accent); color:#000; border:none; padding:8px 16px; border-radius:8px; font-family:'DM Sans',sans-serif; font-weight:600; font-size:13px; cursor:pointer; transition:all 0.2s; }
+    .btn:hover { background:var(--accent2); }
+    .btn:disabled { opacity:0.5; cursor:not-allowed; }
+    .btn.blue { background:var(--blue); color:#fff; }
+    .btn.blue:hover { background:#2563eb; }
+    .jobs-grid { display:flex; flex-direction:column; gap:12px; }
+    .job-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; display:grid; grid-template-columns:1fr 160px 100px 60px auto; align-items:center; gap:12px; transition:all 0.2s; }
+    .job-card:hover { border-color:var(--accent); background:var(--surface2); }
+    .job-card .prop { font-weight:600; font-size:15px; margin-bottom:4px; }
+    .job-card .group { font-size:12px; color:var(--text2); }
+    .job-card .cleaner { display:flex; align-items:center; gap:8px; }
+    .job-card .cleaner .avatar { width:32px; height:32px; border-radius:50%; background:var(--surface2); border:2px solid var(--accent); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:600; color:var(--accent); flex-shrink:0; }
+    .job-card .cleaner .name { font-weight:500; font-size:14px; }
+    .job-card .progress-checks { display:flex; gap:12px; align-items:center; }
+    .job-card .check-item { display:flex; flex-direction:column; align-items:center; gap:2px; cursor:pointer; }
+    .job-card .check-item input[type="checkbox"] { width:18px; height:18px; cursor:pointer; accent-color:var(--accent); }
+    .job-card .check-item .check-label { font-size:9px; color:var(--text2); text-align:center; line-height:1.2; }
+    .job-card .report-link { font-size:11px; }
+    .job-card .report-link a { color:var(--blue); text-decoration:none; }
+    .job-card .report-link a:hover { text-decoration:underline; }
+    .badge { display:inline-block; padding:4px 10px; border-radius:20px; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; }
+    .badge.pending { background:rgba(245,158,11,0.15); color:var(--warn); }
+    .badge.created { background:rgba(59,130,246,0.15); color:var(--blue); }
+    .badge.started { background:rgba(59,130,246,0.15); color:var(--blue); }
+    .badge.completed, .badge.finished, .badge.closed { background:rgba(34,197,94,0.15); color:var(--accent); }
+    .badge.scheduled { background:rgba(139,143,168,0.15); color:var(--text2); }
+    .time { font-family:'JetBrains Mono',monospace; font-size:13px; color:var(--text2); }
+    .empty { text-align:center; padding:60px 20px; color:var(--text2); }
+    .empty .icon { font-size:48px; margin-bottom:16px; }
+    .loading { text-align:center; padding:40px; color:var(--text2); }
+    .spinner { display:inline-block; width:24px; height:24px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite; }
+    @keyframes spin { to{transform:rotate(360deg)} }
+    .actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    @media(max-width:768px) { .stats{grid-template-columns:repeat(2,1fr);} .job-card{grid-template-columns:1fr;gap:12px;} }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Host<span>Turn</span> Ops</h1>
+    <div class="status"><div class="dot"></div> System Live</div>
+  </div>
+  <div class="container">
+    <div class="stats">
+      <div class="stat"><div class="label">Today's Jobs</div><div class="value green" id="s-jobs">-</div></div>
+      <div class="stat"><div class="label">Properties</div><div class="value blue" id="s-props">-</div></div>
+      <div class="stat"><div class="label">Cleaners Active</div><div class="value" id="s-cleaners">-</div></div>
+      <div class="stat"><div class="label">Completed</div><div class="value green" id="s-done">-</div></div>
+    </div>
+    <div class="tabs">
+      <div class="tab" id="tab-yesterday" onclick="switchTab('yesterday')">Yesterday <span class="count" id="count-yesterday">—</span></div>
+      <div class="tab active" id="tab-today" onclick="switchTab('today')">Today <span class="count" id="count-today">—</span></div>
+      <div class="tab" id="tab-tomorrow" onclick="switchTab('tomorrow')">Tomorrow <span class="count" id="count-tomorrow">—</span></div>
+      <div class="tab" id="tab-dayafter" onclick="switchTab('dayafter')">Day After <span class="count" id="count-dayafter">—</span></div>
+      <div class="tab" id="tab-payments" onclick="switchTab('payments')">Payments 💰</div>
+      <div class="tab" id="tab-calculator" onclick="switchTab('calculator')">Rate Calculator 🧮</div>
+      <div class="tab" id="tab-homes" onclick="switchTab('homes')">Homes 🏠</div>
+    </div>
+    <div class="section-header">
+      <h2 id="schedule-title">Today's Schedule</h2>
+      <div class="actions">
+        <span class="date" id="display-date"></span>
+        <button class="btn" id="sync-btn" onclick="syncTasks()">Sync Breezeway</button>
+        <button class="btn blue" id="send-btn" style="display:none" onclick="sendSchedule()">📩 Send Schedule to Cleaners</button>
+        <button class="btn" id="owner-btn" style="display:none;background:var(--warn);color:#000" onclick="notifyOwners()">📧 Notify Owners</button>
+        <button class="btn" id="closeout-btn" style="display:none;background:#a855f7;color:#fff" onclick="sendCloseouts()">💰 Send Close-Out Emails</button>
+      </div>
+    </div>
+    <div id="jobs" class="jobs-grid">
+      <div class="loading"><div class="spinner"></div><p style="margin-top:12px">Loading jobs...</p></div>
+    </div>
+    <div id="payments-section" style="display:none">
+      <div class="stats" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px;">
+        <div class="stat"><div class="label">Owner Revenue</div><div class="value green" id="p-revenue">$0</div></div>
+        <div class="stat"><div class="label">Owner Paid</div><div class="value green" id="p-paid">$0</div></div>
+        <div class="stat"><div class="label">Outstanding</div><div class="value" style="color:var(--warn)" id="p-outstanding">$0</div></div>
+        <div class="stat"><div class="label">Cleaner Owed</div><div class="value" style="color:var(--danger)" id="p-cleaner-owed">$0</div></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;">
+        <label style="font-size:13px;color:var(--text2)">From:</label>
+        <input type="date" id="p-start" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:13px;">
+        <label style="font-size:13px;color:var(--text2)">To:</label>
+        <input type="date" id="p-end" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:13px;">
+        <button class="btn" onclick="loadPayments()" style="font-size:12px;padding:6px 12px;">Filter</button>
+        <select id="p-filter" onchange="renderPayments()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:13px;">
+          <option value="all">All Jobs</option>
+          <option value="owner-open">Owner Unpaid</option>
+          <option value="owner-paid">Owner Paid</option>
+          <option value="cleaner-unpaid">Cleaner Unpaid</option>
+          <option value="cleaner-paid">Cleaner Paid</option>
+        </select>
+      </div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;" id="payments-table">
+          <thead>
+            <tr style="background:var(--surface2);text-align:left;">
+              <th style="padding:10px;border-bottom:1px solid var(--border);">Date</th>
+              <th style="padding:10px;border-bottom:1px solid var(--border);">Property</th>
+              <th style="padding:10px;border-bottom:1px solid var(--border);">Status</th>
+              <th style="padding:10px;border-bottom:1px solid var(--border);">Report</th>
+              <th style="padding:10px;border-bottom:1px solid var(--border);">Owner Rate</th>
+              <th style="padding:10px;border-bottom:1px solid var(--border);">Invoice</th>
+              <th style="padding:10px;border-bottom:1px solid var(--border);">Owner Payment</th>
+              <th style="padding:10px;border-bottom:1px solid var(--border);">Cleaner</th>
+              <th style="padding:10px;border-bottom:1px solid var(--border);">Cleaner Rate</th>
+              <th style="padding:10px;border-bottom:1px solid var(--border);">Cleaner Payment</th>
+            </tr>
+          </thead>
+          <tbody id="payments-body"></tbody>
+        </table>
+      </div>
+    </div>
+    <!-- Rate Calculator Section -->
+    <div id="calculator-section" style="display:none">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px;">
+        <!-- Calculator Form -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;">
+          <h3 style="margin:0 0 16px 0;font-size:16px;">🧮 Rate Calculator</h3>
+          <div style="margin-bottom:12px;">
+            <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Property Name / Address</label>
+            <input type="text" id="calc-name" placeholder="Enter property name" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div>
+              <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Total Sq Ft</label>
+              <input type="number" id="calc-sf" value="0" min="0" oninput="calcRate()" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Full Bathrooms</label>
+              <input type="number" id="calc-fullbaths" value="0" min="0" oninput="calcRate()" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Half Bathrooms</label>
+              <input type="number" id="calc-halfbaths" value="0" min="0" oninput="calcRate()" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Bedrooms</label>
+              <input type="number" id="calc-bedrooms" value="0" min="0" oninput="calcRate()" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;"># of Beds</label>
+              <input type="number" id="calc-beds" value="0" min="0" oninput="calcRate()" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+            </div>
+            <div>
+              <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Adjustments ($)</label>
+              <input type="number" id="calc-adjust" value="0" oninput="calcRate()" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+            </div>
+          </div>
+          <div style="display:flex;gap:16px;margin-top:12px;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text);cursor:pointer;">
+              <input type="checkbox" id="calc-linen" onchange="calcRate()" style="width:16px;height:16px;"> Linen Delivery (15% discount)
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text);cursor:pointer;">
+              <input type="checkbox" id="calc-pets" onchange="calcRate()" style="width:16px;height:16px;"> Pets Allowed (5% increase)
+            </label>
+          </div>
+          <div style="margin-top:12px;">
+            <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Proposed Rate (optional — enter if different from calculated)</label>
+            <input type="number" id="calc-proposed" value="0" min="0" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+          </div>
+          <div style="margin-top:12px;">
+            <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Notes</label>
+            <textarea id="calc-notes" rows="2" placeholder="Optional notes..." style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:13px;resize:vertical;font-family:inherit;"></textarea>
+          </div>
+          <button class="btn" onclick="saveProspect()" style="margin-top:16px;width:100%;padding:10px;font-size:14px;">💾 Save Prospect</button>
+          <input type="hidden" id="calc-edit-id" value="">
         </div>
-        <div style="background:#f9f9f9;padding:24px;border-radius:0 0 8px 8px;">
-          <p>Hi ${owner.name.split(" ")[0]},</p>
-          <p>Great news! <strong>${propShort}</strong> has been cleaned and is guest-ready.</p>
-          <p><strong>Date:</strong> ${dateStr}</p>
-          ${photosSection}
-          ${paymentHtml}
-          <p>Thank you for the opportunity to service your home!</p>
-          <p style="color:#888;font-size:12px;margin-top:24px;">
-            HostTurn — Short-Term Rental Cleaning<br>
-            <a href="https://hostturn.com" style="color:#22c55e;">hostturn.com</a>
-          </p>
+        <!-- Calculation Breakdown -->
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;">
+          <h3 style="margin:0 0 16px 0;font-size:16px;">📊 Rate Breakdown</h3>
+          <table style="width:100%;border-collapse:collapse;font-size:14px;" id="calc-breakdown">
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:10px;color:var(--text2);">Base (first 1500 SF)</td>
+              <td style="padding:10px;text-align:right;font-family:JetBrains Mono,monospace;" id="cb-base">$75.00</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:10px;color:var(--text2);">Additional SF <span id="cb-sf-note" style="font-size:11px;"></span></td>
+              <td style="padding:10px;text-align:right;font-family:JetBrains Mono,monospace;" id="cb-sf">$0.00</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:10px;color:var(--text2);">Full Bathrooms <span id="cb-fb-note" style="font-size:11px;"></span></td>
+              <td style="padding:10px;text-align:right;font-family:JetBrains Mono,monospace;" id="cb-fb">$0.00</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:10px;color:var(--text2);">Half Bathrooms <span id="cb-hb-note" style="font-size:11px;"></span></td>
+              <td style="padding:10px;text-align:right;font-family:JetBrains Mono,monospace;" id="cb-hb">$0.00</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:10px;color:var(--text2);">Bedrooms <span id="cb-br-note" style="font-size:11px;"></span></td>
+              <td style="padding:10px;text-align:right;font-family:JetBrains Mono,monospace;" id="cb-br">$0.00</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:10px;color:var(--text2);">Extra Beds <span id="cb-beds-note" style="font-size:11px;"></span></td>
+              <td style="padding:10px;text-align:right;font-family:JetBrains Mono,monospace;" id="cb-beds">$0.00</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:10px;color:var(--text2);">Linen Delivery (15% discount)</td>
+              <td style="padding:10px;text-align:right;font-family:JetBrains Mono,monospace;" id="cb-linen">$0.00</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:10px;color:var(--text2);">Pets Allowed (5% increase)</td>
+              <td style="padding:10px;text-align:right;font-family:JetBrains Mono,monospace;" id="cb-pets">$0.00</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:10px;color:var(--text2);">Adjustments</td>
+              <td style="padding:10px;text-align:right;font-family:JetBrains Mono,monospace;" id="cb-adjust">$0.00</td>
+            </tr>
+            <tr style="border-bottom:2px solid var(--accent);background:var(--surface2);">
+              <td style="padding:12px;font-weight:700;font-size:15px;">Calculation Total</td>
+              <td style="padding:12px;text-align:right;font-family:JetBrains Mono,monospace;font-weight:700;font-size:15px;color:var(--accent);" id="cb-total">$75.00</td>
+            </tr>
+            <tr style="background:var(--surface2);">
+              <td style="padding:12px;font-weight:700;font-size:16px;color:var(--accent);">Standard Turnover Rate</td>
+              <td style="padding:12px;text-align:right;font-family:JetBrains Mono,monospace;font-weight:700;font-size:18px;color:var(--accent);" id="cb-standard">$75.00</td>
+            </tr>
+            <tr>
+              <td style="padding:12px;font-weight:600;color:var(--blue);">Deep Clean Rate (130%)</td>
+              <td style="padding:12px;text-align:right;font-family:JetBrains Mono,monospace;font-weight:700;font-size:16px;color:var(--blue);" id="cb-deep">$100.00</td>
+            </tr>
+          </table>
         </div>
-      </div>`;
-    
-    const textBody = `Hi ${owner.name.split(" ")[0]},\n\nGreat news! ${propShort} has been cleaned and is guest-ready.\n\nDate: ${dateStr}\n${reportUrl ? "\nCompletion Photos & Report:\n" + reportUrl + "\n" : ""}${paymentText}\n\nThank you for the opportunity to service your home!\n\nhostturn.com`;
-    
-    await sendEmail({
-      to: owner.email,
-      cc: ccList,
-      subject: `HostTurn — Cleaning Complete: ${propShort} — ${dateStr}`,
-      text: textBody,
-      html: htmlBody
-    });
-    
-    db.prepare("UPDATE jobs SET closeout_email_sent_at = datetime('now') WHERE id = ?").run(job.id);
-    db.prepare("INSERT INTO auto_log (event, job_id, detail) VALUES (?, ?, ?)")
-      .run("closeout_email_sent", job.id, `Sent close-out email to ${owner.name} (${owner.email}) for ${job.property_name}`);
-    
-    res.json({ status: "sent", owner: owner.name, email: owner.email, property: job.property_name, hasReport: !!reportUrl });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
+      </div>
+      <!-- Prospect Homes Table -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;">
+        <h3 style="margin:0 0 16px 0;font-size:16px;">🏠 Prospect Homes</h3>
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+              <tr style="background:var(--surface2);text-align:left;">
+                <th style="padding:10px;border-bottom:1px solid var(--border);">Date</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);">Property</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);">Calculated Rate</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);">Deep Clean</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);">Proposed Rate</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);">Status</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="prospects-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <!-- Homes Management Section -->
+    <div id="homes-section" style="display:none">
+      <!-- Add/Edit Form -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:24px;">
+        <h3 style="margin:0 0 16px 0;font-size:16px;" id="homes-form-title">➕ Add New Home</h3>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+          <div>
+            <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Region *</label>
+            <select id="home-region" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+              <option value="">Select region...</option>
+              <option value="Southern VT">Southern VT</option>
+              <option value="Champlain Valley, VT">Champlain Valley, VT</option>
+              <option value="Hudson Valley, NY">Hudson Valley, NY</option>
+              <option value="Jersey Shore, NJ">Jersey Shore, NJ</option>
+              <option value="Poconos, PA">Poconos, PA</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Property Name *</label>
+            <input type="text" id="home-name" placeholder="e.g. Dover, 185 Tanglewood 56B" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Address</label>
+            <input type="text" id="home-address" placeholder="Full street address" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">City</label>
+            <input type="text" id="home-city" placeholder="City" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">State</label>
+            <input type="text" id="home-state" placeholder="e.g. VT" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Owner / Manager</label>
+            <input type="text" id="home-owner" placeholder="Owner or PM name" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Bedrooms</label>
+            <input type="number" id="home-beds" value="0" min="0" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Bathrooms</label>
+            <input type="number" id="home-baths" value="0" min="0" step="0.5" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Standard Rate ($)</label>
+            <input type="number" id="home-rate" value="0" min="0" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Deep Clean Rate ($)</label>
+            <input type="number" id="home-deeprate" value="0" min="0" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:16px;">
+          <button class="btn" onclick="saveHome()" style="padding:10px 24px;font-size:14px;" id="home-save-btn">💾 Add Home</button>
+          <button class="btn" onclick="cancelEditHome()" style="display:none;padding:10px 24px;font-size:14px;background:var(--surface2);color:var(--text);" id="home-cancel-btn">Cancel</button>
+        </div>
+        <input type="hidden" id="home-edit-id" value="">
+      </div>
+      <!-- Homes Table -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+          <h3 style="margin:0;font-size:16px;">Active Homes (<span id="homes-count">0</span>)</h3>
+          <input type="text" id="homes-search" placeholder="Search homes..." oninput="filterHomes()" style="padding:6px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:13px;width:220px;">
+        </div>
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;" id="homes-table">
+            <thead>
+              <tr style="background:var(--surface2);text-align:left;">
+                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('region')">Region ⇅</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('name')">Property ⇅</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('city')">City ⇅</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('owner_manager')">Owner/Manager ⇅</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('beds')">Beds ⇅</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('baths')">Baths ⇅</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('rate')">Std Rate ⇅</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('deep_clean_rate')">Deep Clean ⇅</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="homes-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    function getLocalDate(offset) {
+      var d = new Date();
+      if (offset) d.setDate(d.getDate() + offset);
+      return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    }
+    function formatDate(dateStr) {
+      return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {weekday:'long', month:'long', day:'numeric', year:'numeric'});
+    }
 
-// Batch send all pending close-out emails for finished jobs
-app.post("/api/send-closeout-emails-batch", async (req, res) => {
-  try {
-    const db = getDb();
-    const date = req.body.date;
-    if (!date) return res.status(400).json({ error: "date required" });
-    
-    const jobs = db.prepare("SELECT * FROM jobs WHERE date = ? AND closeout_email_sent_at IS NULL ORDER BY property_name").all(date);
-    const finishedJobs = jobs.filter(function(j) {
-      var s = (j.bw_status || "").toLowerCase();
-      return s === "finished" || s === "closed" || s === "completed";
-    });
-    
-    if (!finishedJobs.length) return res.json({ sent: 0, total: 0, message: "No finished jobs without close-out emails" });
-    
-    const results = [];
-    for (const job of finishedJobs) {
+    var yesterdayDate = getLocalDate(-1);
+    var todayDate = getLocalDate(0);
+    var tomorrowDate = getLocalDate(1);
+    var dayAfterDate = getLocalDate(2);
+    var currentTab = 'today';
+    var yesterdayJobs = [];
+    var todayJobs = [];
+    var tomorrowJobs = [];
+    var dayAfterJobs = [];
+
+    function switchTab(tab) {
+      currentTab = tab;
+      document.getElementById('tab-yesterday').className = tab === 'yesterday' ? 'tab active' : 'tab';
+      document.getElementById('tab-today').className = tab === 'today' ? 'tab active' : 'tab';
+      document.getElementById('tab-tomorrow').className = tab === 'tomorrow' ? 'tab active' : 'tab';
+      document.getElementById('tab-dayafter').className = tab === 'dayafter' ? 'tab active' : 'tab';
+      document.getElementById('tab-payments').className = tab === 'payments' ? 'tab active' : 'tab';
+      document.getElementById('tab-calculator').className = tab === 'calculator' ? 'tab active' : 'tab';
+      document.getElementById('tab-homes').className = tab === 'homes' ? 'tab active' : 'tab';
+      
+      // Show/hide sections
+      var isOps = (tab === 'yesterday' || tab === 'today' || tab === 'tomorrow' || tab === 'dayafter');
+      document.getElementById('jobs').style.display = isOps ? 'block' : 'none';
+      document.getElementById('payments-section').style.display = tab === 'payments' ? 'block' : 'none';
+      document.getElementById('calculator-section').style.display = tab === 'calculator' ? 'block' : 'none';
+      document.getElementById('homes-section').style.display = tab === 'homes' ? 'block' : 'none';
+      document.querySelector('.section-header').style.display = isOps ? 'flex' : 'none';
+      
+      if (tab === 'payments') {
+        loadPayments();
+        return;
+      }
+      if (tab === 'calculator') {
+        loadProspects();
+        return;
+      }
+      if (tab === 'homes') {
+        loadHomes();
+        return;
+      }
+      var isFuture = (tab === 'tomorrow' || tab === 'dayafter');
+      var schedDate = tab === 'yesterday' ? yesterdayDate : tab === 'today' ? todayDate : tab === 'tomorrow' ? tomorrowDate : dayAfterDate;
+      var schedTitle = tab === 'yesterday' ? "Yesterday's Schedule" : tab === 'today' ? "Today's Schedule" : tab === 'tomorrow' ? "Tomorrow's Schedule" : "Day After Tomorrow";
+      document.getElementById('schedule-title').textContent = schedTitle;
+      document.getElementById('display-date').textContent = formatDate(schedDate);
+      document.getElementById('send-btn').style.display = isFuture ? 'inline-flex' : 'none';
+      document.getElementById('owner-btn').style.display = isFuture ? 'inline-flex' : 'none';
+      // Show close-out button if there are finished jobs without close-out emails
+      var activeJobs = tab === 'yesterday' ? yesterdayJobs : tab === 'today' ? todayJobs : tab === 'tomorrow' ? tomorrowJobs : dayAfterJobs;
+      var pendingCloseouts = activeJobs.filter(function(j) {
+        var s = (j.bw_status || '').toLowerCase();
+        return (s === 'finished' || s === 'closed' || s === 'completed') && !j.closeout_email_sent_at;
+      });
+      var cbtn = document.getElementById('closeout-btn');
+      if (pendingCloseouts.length > 0) {
+        cbtn.style.display = 'inline-flex';
+        cbtn.textContent = '💰 Send Close-Out Emails (' + pendingCloseouts.length + ')';
+        cbtn.style.background = '#a855f7'; cbtn.style.color = '#fff';
+      } else if (activeJobs.some(function(j){return j.closeout_email_sent_at})) {
+        cbtn.style.display = 'inline-flex';
+        cbtn.textContent = '✅ Close-Outs Sent';
+        cbtn.style.background = 'var(--accent)'; cbtn.style.color = '#000';
+      } else {
+        cbtn.style.display = 'none';
+      }
+      // Update send/owner buttons for future tabs
+      if (isFuture) {
+        var futureJobs = tab === 'tomorrow' ? tomorrowJobs : dayAfterJobs;
+        var assignedJobs = futureJobs.filter(function(j){return j.cleaner_name});
+        var allSent = assignedJobs.length && assignedJobs.every(function(j){return j.schedule_sent_at});
+        var allConfirmed = assignedJobs.length && assignedJobs.every(function(j){return j.confirmed_at});
+        var btn = document.getElementById('send-btn');
+        if (allConfirmed) {
+          btn.textContent = '✅ All Confirmed';
+          btn.style.background = 'var(--accent)'; btn.style.color = '#000';
+        } else if (allSent) {
+          btn.textContent = '📩 Resend Schedule';
+          btn.style.background = 'var(--warn)'; btn.style.color = '#000';
+        } else {
+          btn.textContent = '📩 Send Schedule to Cleaners';
+          btn.style.background = 'var(--blue)'; btn.style.color = '#fff';
+        }
+        // Update owner button
+        var obtn = document.getElementById('owner-btn');
+        var notifiedCount = futureJobs.filter(function(j){return j.owner_notified_at}).length;
+        var allOwnerNotified = futureJobs.length && notifiedCount === futureJobs.length;
+        var allOwnerConfirmed = futureJobs.length && futureJobs.every(function(j){return j.owner_confirmed_at});
+        var pendingOwners = futureJobs.length - notifiedCount;
+        if (allOwnerConfirmed) {
+          obtn.textContent = '✅ Owners Confirmed';
+          obtn.style.background = 'var(--accent)'; obtn.style.color = '#000';
+        } else if (allOwnerNotified) {
+          obtn.textContent = '✅ Owners Notified (' + notifiedCount + '/' + futureJobs.length + ')';
+          obtn.style.background = 'var(--accent)'; obtn.style.color = '#000';
+        } else if (notifiedCount > 0) {
+          obtn.textContent = '📧 Notify Remaining (' + pendingOwners + ')';
+          obtn.style.background = 'var(--warn)'; obtn.style.color = '#000';
+        } else {
+          obtn.textContent = '📧 Notify Owners (' + futureJobs.length + ')';
+          obtn.style.background = 'var(--warn)'; obtn.style.color = '#000';
+        }
+      }
+      renderJobs();
+    }
+
+    function renderJobs() {
+      var jobs = currentTab === 'yesterday' ? yesterdayJobs : currentTab === 'today' ? todayJobs : currentTab === 'tomorrow' ? tomorrowJobs : dayAfterJobs;
+      var el = document.getElementById('jobs');
+      if (!jobs.length) {
+        var label = currentTab === 'yesterday' ? 'yesterday' : currentTab === 'today' ? 'today' : currentTab === 'tomorrow' ? 'tomorrow' : 'the day after tomorrow';
+        el.innerHTML = '<div class="empty"><div class="icon">📋</div><p>No jobs scheduled for ' + label + '.<br>Click "Sync Breezeway" to pull tasks.</p></div>';
+        return;
+      }
+      el.innerHTML = jobs.map(function(j) {
+        var init = j.cleaner_name ? j.cleaner_name.split(' ').map(function(w){return w[0]}).join('').substring(0,2).toUpperCase() : '??';
+        var st = j.bw_status || 'Scheduled';
+        var sl = st.toLowerCase();
+        var sc = (sl==='completed'||sl==='finished'||sl==='closed') ? 'completed' : sl==='started' ? 'started' : sl==='created' ? 'created' : st!=='Scheduled' ? 'pending' : 'scheduled';
+        var smsStatus = '';
+        if (j.confirmed_at) {
+          smsStatus = '<span style="font-size:11px;color:var(--accent);margin-left:4px">✅ Confirmed</span>';
+        } else if (j.schedule_sent_at) {
+          smsStatus = '<span style="font-size:11px;color:var(--warn);margin-left:4px">📩 Sent</span>';
+        }
+        var ownerStatus = '';
+        if (j.owner_confirmed_at) {
+          ownerStatus = '<span style="font-size:11px;color:var(--accent);margin-left:4px">✅ Owner OK</span>';
+        } else if (j.owner_notified_at) {
+          ownerStatus = '<span style="font-size:11px;color:var(--warn);margin-left:4px">📧 Owner Notified</span>';
+        }
+        if (j.closeout_email_sent_at) {
+          ownerStatus += '<span style="font-size:11px;color:var(--accent);margin-left:4px">💰 Invoice Sent</span>';
+        }
+        // Progress checkboxes and report link (Yesterday and Today tabs)
+        var progressHtml = '';
+        if (currentTab === 'today' || currentTab === 'yesterday') {
+          var arrChecked = j.arrival_confirmed_at ? 'checked' : '';
+          var rptChecked = j.report_verified_at ? 'checked' : '';
+          var reportLink = j.bw_report_url 
+            ? '<a href="' + j.bw_report_url + '" target="_blank" title="View Cleaning Report">📋 Report</a>' 
+            : '<span style="color:var(--text2)">—</span>';
+          progressHtml = '<div class="progress-checks">' +
+            '<div class="check-item" onclick="toggleArrival(\'' + j.id + '\')">' +
+              '<input type="checkbox" ' + arrChecked + ' onclick="event.stopPropagation();toggleArrival(\'' + j.id + '\')">' +
+              '<span class="check-label">Arrival /<br>Progress</span>' +
+            '</div>' +
+            '<div class="check-item" onclick="toggleReport(\'' + j.id + '\')">' +
+              '<input type="checkbox" ' + rptChecked + ' onclick="event.stopPropagation();toggleReport(\'' + j.id + '\')">' +
+              '<span class="check-label">Report<br>Verified</span>' +
+            '</div>' +
+          '</div>' +
+          '<div class="report-link">' + reportLink + '</div>';
+        }
+        
+        return '<div class="job-card"><div><div class="prop">' + j.property_name + '</div><div class="group">' + (j.group_name || '') + ownerStatus + '</div></div><div class="cleaner"><div class="avatar">' + init + '</div><div><div class="name">' + (j.cleaner_name || 'Unassigned') + '</div>' + smsStatus + '</div></div><div><span class="badge ' + sc + '">' + st + '</span></div><div class="time">' + (j.expected_arrival || '') + '</div>' + progressHtml + '</div>';
+      }).join('');
+    }
+
+    async function loadAllJobs() {
       try {
-        // Match owner
-        const owners = db.prepare("SELECT * FROM contacts WHERE role = 'owner'").all();
-        let owner = null;
-        for (const o of owners) {
-          if (!o.properties) continue;
-          const keywords = o.properties.split(",").map(function(k) { return k.trim().toLowerCase(); });
-          const propLower = job.property_name.toLowerCase();
-          const groupLower = (job.group_name || "").toLowerCase();
-          if (keywords.some(function(k) { return propLower.includes(k) || groupLower.includes(k); })) { owner = o; break; }
-        }
-        
-        if (!owner || !owner.email) {
-          results.push({ property: job.property_name, status: "no_owner_email", error: "No owner email matched" });
-          continue;
-        }
-        
-        const propShort = job.property_name.split(" - ")[0];
-        const dateStr = new Date(job.date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
-        const rate = job.rate || 0;
-        const reportUrl = job.bw_report_url || null;
-        
-        const nodemailer = require("nodemailer");
-        const ccList = [owner.cc_email, "lizzy@hostturn.com"].filter(Boolean).join(",");
-        
-        let photosSection = reportUrl ? `<p><strong>Completion Photos & Report:</strong><br><a href="${reportUrl}" style="color:#22c55e;font-weight:bold;">View Cleaning Report & Photos in Breezeway</a></p>` : "";
-        let paymentHtml = "";
-        let paymentText = "";
-        if (rate > 0) {
-          paymentHtml = `<p><strong>Cleaning Fee: $${rate.toFixed(2)}</strong></p><hr style="border:none;border-top:1px solid #ddd;margin:20px 0;"><p><strong>Payment Options:</strong></p><p><strong>Zelle:</strong> pedro@hostturn.com<br><strong>Venmo:</strong> @Pedro-Zevallos</p><p>Please remit payment at your earliest opportunity.</p>`;
-          paymentText = `\nCleaning Fee: $${rate.toFixed(2)}\n\nPayment Options:\nZelle: pedro@hostturn.com\nVenmo: @Pedro-Zevallos\n\nPlease remit payment at your earliest opportunity.`;
-        }
-        
-        const htmlBody = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;"><div style="background:#1a1d27;padding:20px;border-radius:8px 8px 0 0;"><h2 style="color:#22c55e;margin:0;">HostTurn — Cleaning Complete ✅</h2></div><div style="background:#f9f9f9;padding:24px;border-radius:0 0 8px 8px;"><p>Hi ${owner.name.split(" ")[0]},</p><p>Great news! <strong>${propShort}</strong> has been cleaned and is guest-ready.</p><p><strong>Date:</strong> ${dateStr}</p>${photosSection}${paymentHtml}<p>Thank you for the opportunity to service your home!</p><p style="color:#888;font-size:12px;margin-top:24px;">HostTurn — Short-Term Rental Cleaning<br><a href="https://hostturn.com" style="color:#22c55e;">hostturn.com</a></p></div></div>`;
-        const textBody = `Hi ${owner.name.split(" ")[0]},\n\nGreat news! ${propShort} has been cleaned and is guest-ready.\n\nDate: ${dateStr}\n${reportUrl ? "\nCompletion Photos & Report:\n" + reportUrl + "\n" : ""}${paymentText}\n\nThank you for the opportunity to service your home!\n\nhostturn.com`;
-        
-        await sendEmail({
-          to: owner.email,
-          cc: ccList,
-          subject: `HostTurn — Cleaning Complete: ${propShort} — ${dateStr}`,
-          text: textBody,
-          html: htmlBody
+        var results = await Promise.all([
+          fetch('/api/jobs?date=' + yesterdayDate).then(function(r){return r.json()}),
+          fetch('/api/jobs?date=' + todayDate).then(function(r){return r.json()}),
+          fetch('/api/jobs?date=' + tomorrowDate).then(function(r){return r.json()}),
+          fetch('/api/jobs?date=' + dayAfterDate).then(function(r){return r.json()})
+        ]);
+        yesterdayJobs = results[0];
+        todayJobs = results[1];
+        tomorrowJobs = results[2];
+        dayAfterJobs = results[3];
+        var cleaners = [];
+        todayJobs.forEach(function(j){ if(j.cleaner_name && cleaners.indexOf(j.cleaner_name)===-1) cleaners.push(j.cleaner_name); });
+        var done = todayJobs.filter(function(j){ var s=(j.bw_status||'').toLowerCase(); return s==='completed'||s==='finished'||s==='closed'; }).length;
+        document.getElementById('s-jobs').textContent = todayJobs.length;
+        document.getElementById('s-done').textContent = done + '/' + todayJobs.length;
+        document.getElementById('s-cleaners').textContent = cleaners.length;
+        document.getElementById('count-yesterday').textContent = yesterdayJobs.length;
+        document.getElementById('count-today').textContent = todayJobs.length;
+        document.getElementById('count-tomorrow').textContent = tomorrowJobs.length;
+        document.getElementById('count-dayafter').textContent = dayAfterJobs.length;
+        try { var p = await (await fetch('/api/properties/count')).json(); document.getElementById('s-props').textContent = p.count || '--'; } catch(e){}
+        renderJobs();
+        // Refresh button states
+        switchTab(currentTab);
+      } catch(e) {
+        document.getElementById('jobs').innerHTML = '<div class="empty"><p>Error: ' + e.message + '</p></div>';
+      }
+    }
+
+    async function toggleArrival(jobId) {
+      await fetch('/api/jobs/' + jobId + '/arrival-confirmed', {method:'POST'});
+      loadAllJobs();
+    }
+    
+    async function toggleReport(jobId) {
+      await fetch('/api/jobs/' + jobId + '/report-verified', {method:'POST'});
+      loadAllJobs();
+    }
+
+    async function syncTasks() {
+      var btn = document.getElementById('sync-btn');
+      btn.disabled = true; btn.textContent = 'Syncing...';
+      try {
+        await fetch('/api/sync/properties', {method:'POST'});
+        var results = await Promise.all([
+          fetch('/api/sync/tasks', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:yesterdayDate})}).then(function(r){return r.json()}),
+          fetch('/api/sync/tasks', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:todayDate})}).then(function(r){return r.json()}),
+          fetch('/api/sync/tasks', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:tomorrowDate})}).then(function(r){return r.json()}),
+          fetch('/api/sync/tasks', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:dayAfterDate})}).then(function(r){return r.json()})
+        ]);
+        btn.textContent = 'Synced: ' + results[0].count + '/' + results[1].count + '/' + results[2].count + '/' + results[3].count;
+        setTimeout(function(){ btn.textContent = 'Sync Breezeway'; btn.disabled = false; }, 3000);
+        loadAllJobs();
+      } catch(e) {
+        btn.textContent = 'Error!';
+        setTimeout(function(){ btn.textContent = 'Sync Breezeway'; btn.disabled = false; }, 3000);
+      }
+    }
+
+    async function sendSchedule() {
+      var activeDate = currentTab === 'dayafter' ? dayAfterDate : tomorrowDate;
+      var activeJobs = currentTab === 'dayafter' ? dayAfterJobs : tomorrowJobs;
+      var label = currentTab === 'dayafter' ? 'day after tomorrow' : 'tomorrow';
+      if (!activeJobs.length) { alert('No jobs scheduled for ' + label + '. Sync first.'); return; }
+      var assignedJobs = activeJobs.filter(function(j){return j.cleaner_name});
+      var alreadySent = assignedJobs.every(function(j){return j.schedule_sent_at});
+      if (alreadySent) {
+        if (!confirm('Schedule was already sent to all cleaners. Send again anyway?')) return;
+      }
+      var cleanerList = [];
+      activeJobs.forEach(function(j){ if(j.cleaner_name && cleanerList.indexOf(j.cleaner_name)===-1) cleanerList.push(j.cleaner_name); });
+      if (!alreadySent) {
+        var msg = 'Send ' + label + '\'s schedule via SMS to ' + cleanerList.length + ' cleaner(s)?\n\n';
+        cleanerList.forEach(function(c) {
+          var count = activeJobs.filter(function(j){return j.cleaner_name===c}).length;
+          msg += '• ' + c + ' (' + count + ' job' + (count>1?'s':'') + ')\n';
         });
-        
-        db.prepare("UPDATE jobs SET closeout_email_sent_at = datetime('now') WHERE id = ?").run(job.id);
-        db.prepare("INSERT INTO auto_log (event, job_id, detail) VALUES (?, ?, ?)")
-          .run("closeout_email_sent", job.id, `Sent close-out email to ${owner.name} (${owner.email}) for ${job.property_name}`);
-        results.push({ property: job.property_name, status: "sent", owner: owner.name });
-      } catch (e) {
-        results.push({ property: job.property_name, status: "error", error: e.message });
+        if (!confirm(msg)) return;
+      }
+      var btn = document.getElementById('send-btn');
+      btn.disabled = true; btn.textContent = 'Sending...';
+      try {
+        var r = await fetch('/api/send-schedule', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:activeDate})});
+        var data = await r.json();
+        if (data.error) { btn.textContent = 'Error: ' + data.error; btn.disabled = false; }
+        else {
+          btn.textContent = 'Sent to ' + data.sent + ' of ' + data.total + ' cleaners!';
+          setTimeout(function(){ loadAllJobs(); btn.disabled = false; }, 2000);
+        }
+      } catch(e) {
+        btn.textContent = 'Error!';
+        setTimeout(function(){ btn.disabled = false; loadAllJobs(); }, 2000);
+      }
+    }
+
+    async function notifyOwners() {
+      var activeDate = currentTab === 'dayafter' ? dayAfterDate : tomorrowDate;
+      var activeJobs = currentTab === 'dayafter' ? dayAfterJobs : tomorrowJobs;
+      var label = currentTab === 'dayafter' ? 'day after tomorrow' : 'tomorrow';
+      if (!activeJobs.length) { alert('No jobs scheduled for ' + label + '. Sync first.'); return; }
+      var pendingJobs = activeJobs.filter(function(j){return !j.owner_notified_at});
+      if (!pendingJobs.length) {
+        if (!confirm('All owners have already been notified. Send again anyway?')) return;
+      } else {
+        var msg = 'Send owner notifications for ' + pendingJobs.length + ' job(s) not yet notified?\n\n';
+        pendingJobs.forEach(function(j){ msg += '• ' + j.property_name + '\n'; });
+        if (!confirm(msg)) return;
+      }
+      var btn = document.getElementById('owner-btn');
+      btn.disabled = true; btn.textContent = 'Sending...';
+      try {
+        var r = await fetch('/api/send-owner-notifications', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:activeDate})});
+        var data = await r.json();
+        if (data.error) { btn.textContent = 'Error: ' + data.error; btn.disabled = false; }
+        else {
+          btn.textContent = 'Notified ' + data.sent + ' of ' + data.total + ' owners!';
+          setTimeout(function(){ loadAllJobs(); btn.disabled = false; }, 2000);
+        }
+      } catch(e) {
+        btn.textContent = 'Error!';
+        setTimeout(function(){ btn.disabled = false; loadAllJobs(); }, 2000);
+      }
+    }
+
+    async function sendCloseouts() {
+      var date = currentTab === 'yesterday' ? yesterdayDate : currentTab === 'today' ? todayDate : currentTab === 'tomorrow' ? tomorrowDate : dayAfterDate;
+      var jobs = currentTab === 'yesterday' ? yesterdayJobs : currentTab === 'today' ? todayJobs : currentTab === 'tomorrow' ? tomorrowJobs : dayAfterJobs;
+      var finishedJobs = jobs.filter(function(j) {
+        var s = (j.bw_status || '').toLowerCase();
+        return (s === 'finished' || s === 'closed' || s === 'completed') && !j.closeout_email_sent_at;
+      });
+      if (!finishedJobs.length) { alert('No finished jobs pending close-out emails.'); return; }
+      var msg = 'Send close-out emails (invoice + photos) for ' + finishedJobs.length + ' finished job(s)?\n\n';
+      finishedJobs.forEach(function(j) { msg += '• ' + j.property_name + '\n'; });
+      if (!confirm(msg)) return;
+      var btn = document.getElementById('closeout-btn');
+      btn.disabled = true; btn.textContent = 'Sending...';
+      try {
+        var r = await fetch('/api/send-closeout-emails-batch', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:date})});
+        var data = await r.json();
+        if (data.error) { btn.textContent = 'Error: ' + data.error; }
+        else { btn.textContent = 'Sent ' + data.sent + ' close-out emails!'; }
+        setTimeout(function(){ btn.textContent = '💰 Send Close-Out Emails'; btn.disabled = false; }, 5000);
+        loadAllJobs();
+      } catch(e) {
+        btn.textContent = 'Error!';
+        setTimeout(function(){ btn.textContent = '💰 Send Close-Out Emails'; btn.disabled = false; }, 3000);
+      }
+    }
+
+    document.getElementById('display-date').textContent = formatDate(todayDate);
+    
+    // Payment tracker
+    var paymentData = { jobs: [], summary: {} };
+    
+    // Set default date range (past 30 days to today)
+    var thirtyDaysAgo = getLocalDate(-30);
+    document.getElementById('p-start').value = thirtyDaysAgo;
+    document.getElementById('p-end').value = todayDate;
+    
+    async function loadPayments() {
+      var start = document.getElementById('p-start').value || thirtyDaysAgo;
+      var end = document.getElementById('p-end').value || todayDate;
+      try {
+        var r = await fetch('/api/payment-tracker?start=' + start + '&end=' + end);
+        paymentData = await r.json();
+        // Update summary stats
+        var s = paymentData.summary || {};
+        document.getElementById('p-revenue').textContent = '$' + (s.totalOwnerRevenue || 0).toLocaleString();
+        document.getElementById('p-paid').textContent = '$' + (s.totalOwnerPaid || 0).toLocaleString();
+        document.getElementById('p-outstanding').textContent = '$' + (s.totalOwnerOpen || 0).toLocaleString();
+        document.getElementById('p-cleaner-owed').textContent = '$' + (s.totalCleanerOwed || 0).toLocaleString();
+        renderPayments();
+      } catch(e) {
+        document.getElementById('payments-body').innerHTML = '<tr><td colspan="10" style="padding:20px;text-align:center;color:var(--text2)">Error loading data: ' + e.message + '</td></tr>';
       }
     }
     
-    res.json({ sent: results.filter(function(r) { return r.status === "sent"; }).length, total: results.length, results });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// --- Automation log ---
-app.get("/api/auto-log", (req, res) => {
-  const limit = parseInt(req.query.limit) || 50;
-  res.json(getDb().prepare("SELECT * FROM auto_log ORDER BY created_at DESC LIMIT ?").all(limit));
-});
-
-// --- Stats ---
-app.get("/api/stats", (req, res) => {
-  const db = getDb();
-  const date = req.query.date || new Date().toISOString().split("T")[0];
-  const jobs = db.prepare("SELECT * FROM jobs WHERE date = ?").all(date);
-  const msgs = db.prepare("SELECT * FROM messages WHERE created_at LIKE ? AND direction = 'out'").all(date + "%");
-  const escalations = db.prepare("SELECT COUNT(*) as c FROM messages WHERE is_escalation = 1 AND is_resolved = 0").get();
-
-  res.json({
-    total_jobs: jobs.length,
-    closed: jobs.filter(j => j.closed).length,
-    started: jobs.filter(j => j.bw_started_at).length,
-    completed: jobs.filter(j => j.bw_completed_at).length,
-    revenue: jobs.reduce((s, j) => s + (j.rate || 0), 0),
-    messages_sent: msgs.length,
-    escalations: escalations.c,
-  });
-});
-
-// ═══════════════════════════════════════════════════════
-// WEBHOOKS — Breezeway & Twilio
-// ═══════════════════════════════════════════════════════
-
-// Breezeway task webhook
-app.post("/webhook/breezeway", async (req, res) => {
-  try {
-    console.log("[WEBHOOK BW]", JSON.stringify(req.body).substring(0, 200));
-    const event = req.body.event || req.body.type || "";
-    const taskData = req.body.task || req.body.data || req.body;
-
-    const result = bw.handleWebhook(event, taskData);
-    if (result) {
-      if (result.action === "task_started") await auto.onTaskStarted(result.job);
-      if (result.action === "task_completed") await auto.onTaskCompleted(result.job);
+    function renderPayments() {
+      var filter = document.getElementById('p-filter').value;
+      var jobs = (paymentData.jobs || []).filter(function(j) {
+        if (filter === 'owner-open') return j.rate > 0 && !j.owner_paid_at;
+        if (filter === 'owner-paid') return j.owner_paid_at;
+        if (filter === 'cleaner-unpaid') return j.cleaner_rate > 0 && !j.cleaner_paid_at;
+        if (filter === 'cleaner-paid') return j.cleaner_paid_at;
+        return true;
+      });
+      
+      if (!jobs.length) {
+        document.getElementById('payments-body').innerHTML = '<tr><td colspan="10" style="padding:20px;text-align:center;color:var(--text2)">No jobs match this filter.</td></tr>';
+        return;
+      }
+      
+      document.getElementById('payments-body').innerHTML = jobs.map(function(j) {
+        var dateStr = new Date(j.date + 'T12:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric'});
+        // Show full property name minus the owner/group suffix
+        var propParts = j.property_name.split(' - ');
+        var propShort;
+        if (propParts.length >= 3) {
+          // "Killington - 5983 US Rt. 4 - Jaclyn Vecchione" => "Killington - 5983 US Rt. 4"
+          propShort = propParts.slice(0, -1).join(' - ');
+        } else if (propParts.length === 2) {
+          // "Rutland - 122 Oak St, Kayla" => keep full "Rutland - 122 Oak St, Kayla"
+          // Unless second part looks like just an owner name (no numbers/commas)
+          propShort = propParts[0] + ' - ' + propParts[1];
+        } else {
+          propShort = j.property_name;
+        }
+        var st = (j.bw_status || 'Unknown').toLowerCase();
+        var statusBadge = st === 'finished' || st === 'closed' || st === 'completed' 
+          ? '<span class="badge completed">Finished</span>' 
+          : '<span class="badge created">' + (j.bw_status || '-') + '</span>';
+        
+        // Owner rate & invoice
+        var ownerRate = j.rate > 0 ? '$' + j.rate.toFixed(0) : '-';
+        var invoiceStatus = j.closeout_email_sent_at 
+          ? '<span style="color:var(--accent);font-size:11px">✅ Sent</span>' 
+          : j.rate > 0 ? '<span style="color:var(--text2);font-size:11px">Not sent</span>' : '-';
+        
+        // Owner payment
+        var ownerPayment;
+        if (j.rate === 0) {
+          ownerPayment = '<span style="color:var(--text2)">N/A</span>';
+        } else if (j.owner_paid_at) {
+          ownerPayment = '<button onclick="toggleOwnerPaid(\'' + j.id + '\', false)" style="background:var(--accent);color:#000;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">✅ Paid</button>';
+        } else {
+          ownerPayment = '<button onclick="toggleOwnerPaid(\'' + j.id + '\', true)" style="background:rgba(245,158,11,0.15);color:var(--warn);border:1px solid var(--warn);padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">Open</button>';
+        }
+        
+        // Cleaner info - Joe Anderson is hourly, not flat rate
+        var cleanerName = j.cleaner_name || '-';
+        var cleanerNorm = (j.cleaner_name || '').toLowerCase().replace(/\s+/g, ' ').trim();
+        var isHourly = cleanerNorm === 'joe anderson' || cleanerNorm.includes('carlos beb') || cleanerNorm.includes('ines machala');
+        var cleanerRate = isHourly ? '<span style="color:var(--text2);font-style:italic">Hourly</span>' : (j.cleaner_rate > 0 ? '$' + j.cleaner_rate.toFixed(0) : '-');
+        
+        // Cleaner payment - show Paid/Unpaid button for hourly cleaners too
+        var cleanerPayment;
+        if (!isHourly && (!j.cleaner_rate || j.cleaner_rate === 0)) {
+          cleanerPayment = '<span style="color:var(--text2)">N/A</span>';
+        } else if (j.cleaner_paid_at) {
+          cleanerPayment = '<button onclick="toggleCleanerPaid(\'' + j.id + '\', false)" style="background:var(--accent);color:#000;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">✅ Paid</button>';
+        } else {
+          cleanerPayment = '<button onclick="toggleCleanerPaid(\'' + j.id + '\', true)" style="background:rgba(239,68,68,0.15);color:var(--danger);border:1px solid var(--danger);padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">Unpaid</button>';
+        }
+        
+        // Report link
+        var reportLink = j.bw_report_url 
+          ? '<a href="' + j.bw_report_url + '" target="_blank" style="color:var(--blue);text-decoration:none;font-size:11px;">📋 View</a>' 
+          : '<span style="color:var(--text2);font-size:11px;">—</span>';
+        
+        var rowStyle = 'border-bottom:1px solid var(--border);';
+        return '<tr style="' + rowStyle + '">' +
+          '<td style="padding:10px;">' + dateStr + '</td>' +
+          '<td style="padding:10px;font-weight:500;">' + propShort + '</td>' +
+          '<td style="padding:10px;">' + statusBadge + '</td>' +
+          '<td style="padding:10px;">' + reportLink + '</td>' +
+          '<td style="padding:10px;font-family:JetBrains Mono,monospace;font-weight:600;">' + ownerRate + '</td>' +
+          '<td style="padding:10px;">' + invoiceStatus + '</td>' +
+          '<td style="padding:10px;">' + ownerPayment + '</td>' +
+          '<td style="padding:10px;font-size:12px;">' + cleanerName + '</td>' +
+          '<td style="padding:10px;font-family:JetBrains Mono,monospace;font-weight:600;">' + cleanerRate + '</td>' +
+          '<td style="padding:10px;">' + cleanerPayment + '</td>' +
+        '</tr>';
+      }).join('');
     }
-    res.json({ ok: true });
-  } catch (e) {
-    console.error("[WEBHOOK BW] Error:", e.message);
-    res.status(200).json({ ok: true }); // Always 200 to avoid retries
-  }
-});
+    
+    async function toggleOwnerPaid(jobId, markPaid) {
+      var endpoint = markPaid ? '/api/tracker/' + jobId + '/owner-paid' : '/api/tracker/' + jobId + '/owner-unpaid';
+      await fetch(endpoint, {method:'POST'});
+      loadPayments();
+    }
+    
+    async function toggleCleanerPaid(jobId, markPaid) {
+      var endpoint = markPaid ? '/api/tracker/' + jobId + '/cleaner-paid' : '/api/tracker/' + jobId + '/cleaner-unpaid';
+      await fetch(endpoint, {method:'POST'});
+      loadPayments();
+    }
 
-// Twilio incoming SMS webhook
-app.post("/webhook/twilio", async (req, res) => {
-  try {
-    const from = req.body.From;
-    const body = req.body.Body;
-    console.log("[WEBHOOK TW] From:", from, "Body:", body);
+    loadAllJobs();
+    setInterval(loadAllJobs, 60000);
 
-    await sms.handleIncomingSMS(from, body, req.body);
+    // ═══════════════════════════════════════════════════════
+    // RATE CALCULATOR & PROSPECTS
+    // ═══════════════════════════════════════════════════════
+    
+    function calcRate() {
+      var sf = parseFloat(document.getElementById('calc-sf').value) || 0;
+      var fullBaths = parseInt(document.getElementById('calc-fullbaths').value) || 0;
+      var halfBaths = parseInt(document.getElementById('calc-halfbaths').value) || 0;
+      var bedrooms = parseInt(document.getElementById('calc-bedrooms').value) || 0;
+      var beds = parseInt(document.getElementById('calc-beds').value) || 0;
+      var linen = document.getElementById('calc-linen').checked;
+      var pets = document.getElementById('calc-pets').checked;
+      var adjust = parseFloat(document.getElementById('calc-adjust').value) || 0;
+      
+      // Base: $75 for first 1500 SF
+      var base = 75;
+      
+      // Additional SF: $0.04/SF over 1500
+      var extraSF = Math.max(0, sf - 1500);
+      var sfCost = extraSF * 0.04;
+      
+      // Bathrooms
+      var fbCost = fullBaths * 40;
+      var hbCost = halfBaths * 30;
+      
+      // Bedrooms
+      var brCost = bedrooms * 30;
+      
+      // Extra beds above bedroom count
+      var extraBeds = Math.max(0, beds - bedrooms);
+      var bedsCost = extraBeds * 12;
+      
+      // Subtotal before modifiers
+      var subtotal = base + sfCost + fbCost + hbCost + brCost + bedsCost;
+      
+      // Linen delivery: 15% discount on subtotal
+      var linenDiscount = linen ? -(subtotal * 0.15) : 0;
+      
+      // Pets: 5% increase on subtotal
+      var petsIncrease = pets ? (subtotal * 0.05) : 0;
+      
+      // Total
+      var total = subtotal + linenDiscount + petsIncrease + adjust;
+      
+      // Standard rate: round up to nearest $5
+      var standard = Math.ceil(total / 5) * 5;
+      
+      // Deep clean: 130% of standard, rounded up to nearest $5
+      var deep = Math.ceil((standard * 1.3) / 5) * 5;
+      
+      // Update breakdown display
+      document.getElementById('cb-base').textContent = '$' + base.toFixed(2);
+      document.getElementById('cb-sf').textContent = '$' + sfCost.toFixed(2);
+      document.getElementById('cb-sf-note').textContent = extraSF > 0 ? '(' + extraSF.toFixed(0) + ' SF × $0.04)' : '';
+      document.getElementById('cb-fb').textContent = '$' + fbCost.toFixed(2);
+      document.getElementById('cb-fb-note').textContent = fullBaths > 0 ? '(' + fullBaths + ' × $40)' : '';
+      document.getElementById('cb-hb').textContent = '$' + hbCost.toFixed(2);
+      document.getElementById('cb-hb-note').textContent = halfBaths > 0 ? '(' + halfBaths + ' × $30)' : '';
+      document.getElementById('cb-br').textContent = '$' + brCost.toFixed(2);
+      document.getElementById('cb-br-note').textContent = bedrooms > 0 ? '(' + bedrooms + ' × $30)' : '';
+      document.getElementById('cb-beds').textContent = '$' + bedsCost.toFixed(2);
+      document.getElementById('cb-beds-note').textContent = extraBeds > 0 ? '(' + extraBeds + ' extra × $12)' : '';
+      document.getElementById('cb-linen').textContent = linenDiscount !== 0 ? '-$' + Math.abs(linenDiscount).toFixed(2) : '$0.00';
+      document.getElementById('cb-pets').textContent = '$' + petsIncrease.toFixed(2);
+      document.getElementById('cb-adjust').textContent = adjust >= 0 ? '$' + adjust.toFixed(2) : '-$' + Math.abs(adjust).toFixed(2);
+      document.getElementById('cb-total').textContent = '$' + total.toFixed(2);
+      document.getElementById('cb-standard').textContent = '$' + standard.toFixed(2);
+      document.getElementById('cb-deep').textContent = '$' + deep.toFixed(2);
+      
+      return { total: total, standard: standard, deep: deep };
+    }
+    
+    async function saveProspect() {
+      var name = document.getElementById('calc-name').value.trim();
+      if (!name) { alert('Please enter a property name.'); return; }
+      
+      var rates = calcRate();
+      var editId = document.getElementById('calc-edit-id').value;
+      
+      var data = {
+        property_name: name,
+        total_sf: parseFloat(document.getElementById('calc-sf').value) || 0,
+        full_baths: parseInt(document.getElementById('calc-fullbaths').value) || 0,
+        half_baths: parseInt(document.getElementById('calc-halfbaths').value) || 0,
+        bedrooms: parseInt(document.getElementById('calc-bedrooms').value) || 0,
+        beds: parseInt(document.getElementById('calc-beds').value) || 0,
+        linen_delivery: document.getElementById('calc-linen').checked ? 1 : 0,
+        pets_allowed: document.getElementById('calc-pets').checked ? 1 : 0,
+        adjustments: parseFloat(document.getElementById('calc-adjust').value) || 0,
+        calculated_rate: rates.standard,
+        deep_clean_rate: rates.deep,
+        proposed_rate: parseFloat(document.getElementById('calc-proposed').value) || 0,
+        notes: document.getElementById('calc-notes').value.trim()
+      };
+      if (editId) data.id = editId;
+      
+      await fetch('/api/prospects', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+      
+      // Reset form
+      document.getElementById('calc-edit-id').value = '';
+      document.getElementById('calc-name').value = '';
+      document.getElementById('calc-sf').value = '0';
+      document.getElementById('calc-fullbaths').value = '0';
+      document.getElementById('calc-halfbaths').value = '0';
+      document.getElementById('calc-bedrooms').value = '0';
+      document.getElementById('calc-beds').value = '0';
+      document.getElementById('calc-linen').checked = false;
+      document.getElementById('calc-pets').checked = false;
+      document.getElementById('calc-adjust').value = '0';
+      document.getElementById('calc-proposed').value = '0';
+      document.getElementById('calc-notes').value = '';
+      calcRate();
+      
+      loadProspects();
+    }
+    
+    async function loadProspects() {
+      try {
+        var r = await fetch('/api/prospects');
+        var prospects = await r.json();
+        renderProspects(prospects);
+      } catch(e) {
+        document.getElementById('prospects-body').innerHTML = '<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--text2)">Error: ' + e.message + '</td></tr>';
+      }
+    }
+    
+    function renderProspects(prospects) {
+      if (!prospects.length) {
+        document.getElementById('prospects-body').innerHTML = '<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--text2)">No prospect homes yet. Use the calculator to add one.</td></tr>';
+        return;
+      }
+      document.getElementById('prospects-body').innerHTML = prospects.map(function(p) {
+        var dateStr = new Date(p.created_at).toLocaleDateString('en-US', {month:'short', day:'numeric'});
+        var proposed = p.proposed_rate > 0 ? '$' + p.proposed_rate.toFixed(0) : '-';
+        
+        var statusBtn;
+        if (p.status === 'won') {
+          statusBtn = '<button onclick="setProspectStatus(\'' + p.id + '\',\'prospect\')" style="background:var(--accent);color:#000;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">✅ Won</button>';
+        } else if (p.status === 'lost') {
+          statusBtn = '<button onclick="setProspectStatus(\'' + p.id + '\',\'prospect\')" style="background:rgba(239,68,68,0.15);color:var(--danger);border:1px solid var(--danger);padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">❌ Lost</button>';
+        } else {
+          statusBtn = '<button onclick="setProspectStatus(\'' + p.id + '\',\'won\')" style="background:rgba(34,197,94,0.15);color:var(--accent);border:1px solid var(--accent);padding:3px 8px;border-radius:6px;font-size:10px;font-weight:600;cursor:pointer;margin-right:4px;">Won</button>' +
+            '<button onclick="setProspectStatus(\'' + p.id + '\',\'lost\')" style="background:rgba(239,68,68,0.15);color:var(--danger);border:1px solid var(--danger);padding:3px 8px;border-radius:6px;font-size:10px;font-weight:600;cursor:pointer;">Lost</button>';
+        }
+        
+        return '<tr style="border-bottom:1px solid var(--border);cursor:pointer;" onclick="editProspect(\'' + p.id + '\')">' +
+          '<td style="padding:10px;">' + dateStr + '</td>' +
+          '<td style="padding:10px;font-weight:500;">' + p.property_name + '</td>' +
+          '<td style="padding:10px;font-family:JetBrains Mono,monospace;font-weight:600;color:var(--accent);">$' + p.calculated_rate.toFixed(0) + '</td>' +
+          '<td style="padding:10px;font-family:JetBrains Mono,monospace;color:var(--blue);">$' + p.deep_clean_rate.toFixed(0) + '</td>' +
+          '<td style="padding:10px;font-family:JetBrains Mono,monospace;font-weight:600;">' + proposed + '</td>' +
+          '<td style="padding:10px;" onclick="event.stopPropagation()">' + statusBtn + '</td>' +
+          '<td style="padding:10px;" onclick="event.stopPropagation()"><button onclick="deleteProspect(\'' + p.id + '\')" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:14px;" title="Delete">🗑️</button></td>' +
+        '</tr>';
+      }).join('');
+    }
+    
+    async function editProspect(id) {
+      var r = await fetch('/api/prospects/' + id);
+      var p = await r.json();
+      
+      document.getElementById('calc-edit-id').value = p.id;
+      document.getElementById('calc-name').value = p.property_name;
+      document.getElementById('calc-sf').value = p.total_sf || 0;
+      document.getElementById('calc-fullbaths').value = p.full_baths || 0;
+      document.getElementById('calc-halfbaths').value = p.half_baths || 0;
+      document.getElementById('calc-bedrooms').value = p.bedrooms || 0;
+      document.getElementById('calc-beds').value = p.beds || 0;
+      document.getElementById('calc-linen').checked = !!p.linen_delivery;
+      document.getElementById('calc-pets').checked = !!p.pets_allowed;
+      document.getElementById('calc-adjust').value = p.adjustments || 0;
+      document.getElementById('calc-proposed').value = p.proposed_rate || 0;
+      document.getElementById('calc-notes').value = p.notes || '';
+      calcRate();
+      
+      // Scroll to top of calculator
+      document.getElementById('calculator-section').scrollIntoView({behavior:'smooth'});
+    }
+    
+    async function setProspectStatus(id, status) {
+      await fetch('/api/prospects/' + id + '/status', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({status:status})});
+      loadProspects();
+    }
+    
+    async function deleteProspect(id) {
+      if (!confirm('Delete this prospect?')) return;
+      await fetch('/api/prospects/' + id, {method:'DELETE'});
+      loadProspects();
+    }
 
-    // Return empty TwiML (acknowledge receipt, no auto-reply)
-    res.type("text/xml").send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
-  } catch (e) {
-    console.error("[WEBHOOK TW] Error:", e.message);
-    res.type("text/xml").send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
-  }
-});
-
-// ═══════════════════════════════════════════════════════
-// CRON JOBS — The Automation Schedule
-// ═══════════════════════════════════════════════════════
-
-// Every 5 minutes: check arrival status + poll Breezeway
-cron.schedule("*/5 * * * *", async () => {
-  try {
-    await auto.checkArrivals();
-    await auto.pollBreezewayStatus();
-  } catch (e) { console.error("[CRON] Arrival check error:", e.message); }
-});
-
-// Every 15 minutes: check progress on active cleans
-cron.schedule("*/15 * * * *", async () => {
-  try { await auto.checkProgress(); } catch (e) { console.error("[CRON] Progress check error:", e.message); }
-});
-
-// 6:00 AM: Sync today's tasks from Breezeway
-cron.schedule("0 6 * * *", async () => {
-  try {
-    const date = new Date().toISOString().split("T")[0];
-    console.log(`[CRON] Morning sync for ${date}`);
-    await bw.syncTasksForDate(date);
-  } catch (e) { console.error("[CRON] Morning sync error:", e.message); }
-});
-
-// 6:00 PM: Sync tomorrow's tasks and prepare next-day comms
-cron.schedule("0 18 * * *", async () => {
-  try {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const date = tomorrow.toISOString().split("T")[0];
-    console.log(`[CRON] Evening sync for ${date}`);
-    await bw.syncTasksForDate(date);
-  } catch (e) { console.error("[CRON] Evening sync error:", e.message); }
-});
-
-// ═══════════════════════════════════════════════════════
-// PROPERTY MANAGEMENT
-// ═══════════════════════════════════════════════════════
-
-// Get all properties with full details
-app.get("/api/properties/all", (req, res) => {
-  const db = getDb();
-  const props = db.prepare("SELECT * FROM properties ORDER BY name").all();
-  // Extract city/state from bw_data if not set
-  const result = props.map(p => {
-    let bw = {};
-    try { bw = JSON.parse(p.bw_data || '{}'); } catch(e) {}
-    return {
-      ...p,
-      city: p.city || bw.city || '',
-      state: p.state || bw.state || '',
-      beds: p.beds || bw.bedrooms || 0,
-      baths: p.baths || bw.bathrooms || 0,
-      address: p.address || bw.address1 || '',
-      bw_data: undefined // don't send full JSON to frontend
-    };
-  });
-  res.json(result);
-});
-
-// ═══════════════════════════════════════════════════════
-// RATE CALCULATOR & PROSPECTS
-// ═══════════════════════════════════════════════════════
-
-// Get all prospects
-app.get("/api/prospects", (req, res) => {
-  const db = getDb();
-  const prospects = db.prepare("SELECT * FROM prospects ORDER BY created_at DESC").all();
-  res.json(prospects);
-});
-
-// Get single prospect
-app.get("/api/prospects/:id", (req, res) => {
-  const db = getDb();
-  const prospect = db.prepare("SELECT * FROM prospects WHERE id = ?").get(req.params.id);
-  if (!prospect) return res.status(404).json({ error: "Not found" });
-  res.json(prospect);
-});
-
-// Create/update prospect
-app.post("/api/prospects", (req, res) => {
-  const db = getDb();
-  const p = req.body;
-  const id = p.id || "pr" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-  
-  db.prepare(`
-    INSERT INTO prospects (id, property_name, total_sf, full_baths, half_baths, bedrooms, beds,
-      linen_delivery, pets_allowed, adjustments, calculated_rate, deep_clean_rate, proposed_rate, status, notes, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
-    ON CONFLICT(id) DO UPDATE SET
-      property_name=?, total_sf=?, full_baths=?, half_baths=?, bedrooms=?, beds=?,
-      linen_delivery=?, pets_allowed=?, adjustments=?, calculated_rate=?, deep_clean_rate=?,
-      proposed_rate=?, status=?, notes=?, updated_at=datetime('now')
-  `).run(
-    id, p.property_name, p.total_sf||0, p.full_baths||0, p.half_baths||0, p.bedrooms||0, p.beds||0,
-    p.linen_delivery||0, p.pets_allowed||0, p.adjustments||0, p.calculated_rate||0, p.deep_clean_rate||0,
-    p.proposed_rate||0, p.status||'prospect', p.notes||'',
-    // ON CONFLICT updates:
-    p.property_name, p.total_sf||0, p.full_baths||0, p.half_baths||0, p.bedrooms||0, p.beds||0,
-    p.linen_delivery||0, p.pets_allowed||0, p.adjustments||0, p.calculated_rate||0, p.deep_clean_rate||0,
-    p.proposed_rate||0, p.status||'prospect', p.notes||''
-  );
-  res.json({ id });
-});
-
-// Update prospect status (won/lost)
-app.post("/api/prospects/:id/status", (req, res) => {
-  const db = getDb();
-  db.prepare("UPDATE prospects SET status = ?, updated_at = datetime('now') WHERE id = ?")
-    .run(req.body.status, req.params.id);
-  res.json({ ok: true });
-});
-
-// Delete prospect
-app.delete("/api/prospects/:id", (req, res) => {
-  const db = getDb();
-  db.prepare("DELETE FROM prospects WHERE id = ?").run(req.params.id);
-  res.json({ ok: true });
-});
-
-// ═══════════════════════════════════════════════════════
-// START
-// ═══════════════════════════════════════════════════════
-
-// Initialize DB on startup
-getDb();
-
-app.listen(PORT, () => {
-  console.log(`\n🏠 HostTurn Ops running on port ${PORT}`);
-  console.log(`   Dashboard: http://localhost:${PORT}`);
-  console.log(`   API: http://localhost:${PORT}/api/`);
-  console.log(`   BW Webhook: ${process.env.BASE_URL || "http://localhost:" + PORT}/webhook/breezeway`);
-  console.log(`   Twilio Webhook: ${process.env.BASE_URL || "http://localhost:" + PORT}/webhook/twilio`);
-  console.log(`\n   Cron jobs active:`);
-  console.log(`   - Every 5min: Arrival checks + Breezeway poll`);
-  console.log(`   - Every 15min: Progress checks`);
-  console.log(`   - 6:00 AM: Sync today's tasks`);
-  console.log(`   - 6:00 PM: Sync tomorrow's tasks\n`);
-});
+    // ═══════════════════════════════════════════════════════
+    // HOMES MANAGEMENT
+    // ═══════════════════════════════════════════════════════
+    
+    var allHomes = [];
+    var homesSortCol = 'region';
+    var homesSortDir = 1;
+    
+    async function loadHomes() {
+      try {
+        var r = await fetch('/api/properties/all');
+        allHomes = await r.json();
+        document.getElementById('homes-count').textContent = allHomes.length;
+        renderHomes();
+      } catch(e) {
+        document.getElementById('homes-body').innerHTML = '<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--text2)">Error: ' + e.message + '</td></tr>';
+      }
+    }
+    
+    function sortHomes(col) {
+      if (homesSortCol === col) {
+        homesSortDir = -homesSortDir;
+      } else {
+        homesSortCol = col;
+        homesSortDir = 1;
+      }
+      renderHomes();
+    }
+    
+    function filterHomes() {
+      renderHomes();
+    }
+    
+    function renderHomes() {
+      var search = (document.getElementById('homes-search').value || '').toLowerCase();
+      var homes = allHomes.filter(function(h) {
+        if (!search) return true;
+        return (h.name||'').toLowerCase().includes(search) ||
+          (h.region||'').toLowerCase().includes(search) ||
+          (h.city||'').toLowerCase().includes(search) ||
+          (h.owner_manager||'').toLowerCase().includes(search) ||
+          (h.address||'').toLowerCase().includes(search);
+      });
+      
+      homes.sort(function(a, b) {
+        var va = a[homesSortCol] || '';
+        var vb = b[homesSortCol] || '';
+        if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * homesSortDir;
+        return String(va).localeCompare(String(vb)) * homesSortDir;
+      });
+      
+      if (!homes.length) {
+        document.getElementById('homes-body').innerHTML = '<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--text2)">No homes found.</td></tr>';
+        return;
+      }
+      
+      document.getElementById('homes-body').innerHTML = homes.map(function(h) {
+        var rate = h.rate > 0 ? '$' + h.rate.toFixed(0) : '-';
+        var deep = h.deep_clean_rate > 0 ? '$' + h.deep_clean_rate.toFixed(0) : '-';
+        var regionBadge = '';
+        if (h.region === 'Southern VT') regionBadge = '<span style="background:rgba(34,197,94,0.15);color:var(--accent);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">S. VT</span>';
+        else if (h.region === 'Champlain Valley, VT') regionBadge = '<span style="background:rgba(168,85,247,0.15);color:#a855f7;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">CV VT</span>';
+        else if (h.region === 'Hudson Valley, NY') regionBadge = '<span style="background:rgba(59,130,246,0.15);color:var(--blue);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">HV NY</span>';
+        else if (h.region === 'Jersey Shore, NJ') regionBadge = '<span style="background:rgba(236,72,153,0.15);color:#ec4899;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">JS NJ</span>';
+        else if (h.region === 'Poconos, PA') regionBadge = '<span style="background:rgba(245,158,11,0.15);color:var(--warn);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">PA</span>';
+        else regionBadge = '<span style="color:var(--text2);font-size:11px;">' + (h.region || '-') + '</span>';
+        
+        var propName = h.name || '-';
+        var city = h.city || '-';
+        var owner = h.owner_manager || '-';
+        
+        return '<tr style="border-bottom:1px solid var(--border);">' +
+          '<td style="padding:10px;">' + regionBadge + '</td>' +
+          '<td style="padding:10px;font-weight:500;">' + propName + '</td>' +
+          '<td style="padding:10px;font-size:12px;">' + city + '</td>' +
+          '<td style="padding:10px;font-size:12px;">' + owner + '</td>' +
+          '<td style="padding:10px;text-align:center;">' + (h.beds || '-') + '</td>' +
+          '<td style="padding:10px;text-align:center;">' + (h.baths || '-') + '</td>' +
+          '<td style="padding:10px;font-family:JetBrains Mono,monospace;font-weight:600;color:var(--accent);">' + rate + '</td>' +
+          '<td style="padding:10px;font-family:JetBrains Mono,monospace;color:var(--blue);">' + deep + '</td>' +
+          '<td style="padding:10px;"><button onclick="editHome(\'' + h.id + '\')" style="background:none;border:none;cursor:pointer;font-size:14px;" title="Edit">✏️</button></td>' +
+        '</tr>';
+      }).join('');
+    }
+    
+    function editHome(id) {
+      var h = allHomes.find(function(x) { return x.id === id; });
+      if (!h) return;
+      document.getElementById('home-edit-id').value = h.id;
+      document.getElementById('home-region').value = h.region || '';
+      document.getElementById('home-name').value = h.name || '';
+      document.getElementById('home-address').value = h.address || '';
+      document.getElementById('home-city').value = h.city || '';
+      document.getElementById('home-state').value = h.state || '';
+      document.getElementById('home-owner').value = h.owner_manager || '';
+      document.getElementById('home-beds').value = h.beds || 0;
+      document.getElementById('home-baths').value = h.baths || 0;
+      document.getElementById('home-rate').value = h.rate || 0;
+      document.getElementById('home-deeprate').value = h.deep_clean_rate || 0;
+      document.getElementById('homes-form-title').textContent = '✏️ Edit: ' + (h.name || 'Home');
+      document.getElementById('home-save-btn').textContent = '💾 Save Changes';
+      document.getElementById('home-cancel-btn').style.display = 'inline-flex';
+      document.getElementById('homes-section').scrollTo({top:0, behavior:'smooth'});
+    }
+    
+    function cancelEditHome() {
+      document.getElementById('home-edit-id').value = '';
+      document.getElementById('home-region').value = '';
+      document.getElementById('home-name').value = '';
+      document.getElementById('home-address').value = '';
+      document.getElementById('home-city').value = '';
+      document.getElementById('home-state').value = '';
+      document.getElementById('home-owner').value = '';
+      document.getElementById('home-beds').value = '0';
+      document.getElementById('home-baths').value = '0';
+      document.getElementById('home-rate').value = '0';
+      document.getElementById('home-deeprate').value = '0';
+      document.getElementById('homes-form-title').textContent = '➕ Add New Home';
+      document.getElementById('home-save-btn').textContent = '💾 Add Home';
+      document.getElementById('home-cancel-btn').style.display = 'none';
+    }
+    
+    async function saveHome() {
+      var name = document.getElementById('home-name').value.trim();
+      if (!name) { alert('Please enter a property name.'); return; }
+      
+      var editId = document.getElementById('home-edit-id').value;
+      var data = {
+        name: name,
+        address: document.getElementById('home-address').value.trim(),
+        region: document.getElementById('home-region').value,
+        city: document.getElementById('home-city').value.trim(),
+        state: document.getElementById('home-state').value.trim(),
+        owner_manager: document.getElementById('home-owner').value.trim(),
+        beds: parseInt(document.getElementById('home-beds').value) || 0,
+        baths: parseFloat(document.getElementById('home-baths').value) || 0,
+        rate: parseFloat(document.getElementById('home-rate').value) || 0,
+        deep_clean_rate: parseFloat(document.getElementById('home-deeprate').value) || 0
+      };
+      
+      if (editId) {
+        await fetch('/api/properties/' + editId + '/update', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+      } else {
+        await fetch('/api/properties/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+      }
+      
+      cancelEditHome();
+      loadHomes();
+    }
+  </script>
+</body>
+</html>
