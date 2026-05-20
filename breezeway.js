@@ -206,7 +206,7 @@ async function syncTasksForDate(date) {
       let cleaner = "";
       // Filter out admin accounts — Pedro and Lizzy are company owners, not cleaners
       // Look through ALL assignments to find a real cleaner (not admin)
-      const ADMIN_NAMES = ["pedro zevallos", "lizzy zevallos"];
+      const ADMIN_NAMES = ["pedro zevallos", "lizzy zevallos", "elizabeth zevallos"];
       const allAssignments = t.assignments || t.assignees || [];
       for (const a of allAssignments) {
         const aName = (a.name || a.full_name || "").replace(/\s+/g, ' ').trim();
