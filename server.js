@@ -273,7 +273,7 @@ app.get("/api/payment-tracker", (req, res) => {
   `).all(startDate, endDate);
   
   // Filter out admin jobs (Pedro/Lizzy are company owners, not cleaners)
-  const ADMIN_NAMES = ["pedro zevallos", "lizzy zevallos"];
+  const ADMIN_NAMES = ["pedro zevallos", "lizzy zevallos", "elizabeth zevallos"];
   const finished = jobs.filter(j => {
     const isFinished = ['finished','closed','completed'].includes((j.bw_status||'').toLowerCase());
     const hasPaymentData = j.closeout_email_sent_at || j.owner_paid_at || j.cleaner_paid_at;
