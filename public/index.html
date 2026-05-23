@@ -535,10 +535,10 @@
           fetch('/api/jobs?date=' + tomorrowDate).then(function(r){return r.json()}),
           fetch('/api/jobs?date=' + dayAfterDate).then(function(r){return r.json()})
         ]);
-        yesterdayJobs = results[0];
-        todayJobs = results[1];
-        tomorrowJobs = results[2];
-        dayAfterJobs = results[3];
+        yesterdayJobs = Array.isArray(results[0]) ? results[0] : [];
+        todayJobs = Array.isArray(results[1]) ? results[1] : [];
+        tomorrowJobs = Array.isArray(results[2]) ? results[2] : [];
+        dayAfterJobs = Array.isArray(results[3]) ? results[3] : [];
         var cleaners = [];
         todayJobs.forEach(function(j){ if(j.cleaner_name && cleaners.indexOf(j.cleaner_name)===-1) cleaners.push(j.cleaner_name); });
         var done = todayJobs.filter(function(j){ var s=(j.bw_status||'').toLowerCase(); return s==='completed'||s==='finished'||s==='closed'; }).length;
