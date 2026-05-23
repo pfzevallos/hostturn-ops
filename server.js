@@ -125,10 +125,10 @@ app.get("/api/contacts", (req, res) => {
 
 app.post("/api/contacts", (req, res) => {
   const db = getDb();
-  const { name, phone, email, role, lang, properties, notes } = req.body;
+  const { name, phone, email, role, lang, properties, notes, cc_email } = req.body;
   const id = "c" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-  db.prepare("INSERT INTO contacts (id, name, phone, email, role, lang, properties, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-    .run(id, name, phone, email, role || "cleaner", lang || "en", properties, notes);
+  db.prepare("INSERT INTO contacts (id, name, phone, email, role, lang, properties, notes, cc_email) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .run(id, name, phone, email, role || "cleaner", lang || "en", properties, notes, cc_email || null);
   res.json({ id });
 });
 
