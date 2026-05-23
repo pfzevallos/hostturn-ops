@@ -260,6 +260,13 @@ app.post("/api/jobs/:jobId/set-cleaner-rate", (req, res) => {
   res.json({ ok: true, rate });
 });
 
+// Update job status manually
+app.post("/api/jobs/:jobId/set-status", (req, res) => {
+  const db = getDb();
+  db.prepare("UPDATE jobs SET bw_status = ? WHERE id = ?").run(req.body.status || '', req.params.jobId);
+  res.json({ ok: true });
+});
+
 // Get payment tracker data (all finished jobs with payment status)
 app.get("/api/payment-tracker", (req, res) => {
   const db = getDb();
