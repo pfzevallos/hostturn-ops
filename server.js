@@ -598,7 +598,9 @@ app.post("/api/send-owner-notifications", async (req, res) => {
         continue;
       }
       
-      const checkoutTime = job.checkout_time || "10:00 AM";
+      const isWanderlust = (job.group_name || "").toLowerCase().includes("wanderlust");
+      const defaultCheckout = isWanderlust ? "11:00 AM" : "10:00 AM";
+      const checkoutTime = job.checkout_time || defaultCheckout;
       const dateStr = new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
       const propShort = job.property_name.split(" - ")[0];
       
