@@ -361,9 +361,17 @@
   </div>
   <script>
     function getLocalDate(offset) {
-      var d = new Date();
-      if (offset) d.setDate(d.getDate() + offset);
-      return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+      // Always use Eastern time (America/New_York) to match business operations
+      var now = new Date();
+      var eastern = new Date(now.toLocaleString('en-US', {timeZone: 'America/New_York'}));
+      if (offset) eastern.setDate(eastern.getDate() + offset);
+      return eastern.getFullYear() + '-' + String(eastern.getMonth()+1).padStart(2,'0') + '-' + String(eastern.getDate()).padStart(2,'0');
+    }
+    function refreshDates() {
+      yesterdayDate = getLocalDate(-1);
+      todayDate = getLocalDate(0);
+      tomorrowDate = getLocalDate(1);
+      dayAfterDate = getLocalDate(2);
     }
     function formatDate(dateStr) {
       return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', {weekday:'long', month:'long', day:'numeric', year:'numeric'});
@@ -529,6 +537,7 @@
 
     async function loadAllJobs() {
       try {
+        refreshDates();
         var results = await Promise.all([
           fetch('/api/jobs?date=' + yesterdayDate).then(function(r){return r.json()}),
           fetch('/api/jobs?date=' + todayDate).then(function(r){return r.json()}),
@@ -572,6 +581,7 @@
       var btn = document.getElementById('sync-btn');
       btn.disabled = true; btn.textContent = 'Syncing...';
       try {
+        refreshDates();
         await fetch('/api/sync/properties', {method:'POST'});
         var results = await Promise.all([
           fetch('/api/sync/tasks', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:yesterdayDate})}).then(function(r){return r.json()}),
