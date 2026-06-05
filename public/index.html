@@ -363,9 +363,10 @@
     function getLocalDate(offset) {
       // Always use Eastern time (America/New_York) to match business operations
       var now = new Date();
-      var eastern = new Date(now.toLocaleString('en-US', {timeZone: 'America/New_York'}));
-      if (offset) eastern.setDate(eastern.getDate() + offset);
-      return eastern.getFullYear() + '-' + String(eastern.getMonth()+1).padStart(2,'0') + '-' + String(eastern.getDate()).padStart(2,'0');
+      if (offset) now = new Date(now.getTime() + offset * 86400000);
+      // Use Intl.DateTimeFormat for reliable timezone conversion
+      var fmt = new Intl.DateTimeFormat('en-CA', {timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit'});
+      return fmt.format(now); // returns YYYY-MM-DD format
     }
     function refreshDates() {
       yesterdayDate = getLocalDate(-1);
@@ -388,6 +389,7 @@
     var dayAfterJobs = [];
 
     function switchTab(tab) {
+      refreshDates();
       currentTab = tab;
       document.getElementById('tab-yesterday').className = tab === 'yesterday' ? 'tab active' : 'tab';
       document.getElementById('tab-today').className = tab === 'today' ? 'tab active' : 'tab';
