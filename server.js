@@ -364,10 +364,10 @@ app.post("/api/properties/:id/update", (req, res) => {
   const p = req.body;
   db.prepare(`UPDATE properties SET 
     name=?, address=?, beds=?, baths=?, rate=?, deep_clean_rate=?,
-    region=?, city=?, state=?, owner_manager=?, updated_at=datetime('now')
+    region=?, city=?, state=?, owner_manager=?, stripe_link=?, updated_at=datetime('now')
     WHERE id = ?`).run(
     p.name||'', p.address||'', p.beds||0, p.baths||0, p.rate||0, p.deep_clean_rate||0,
-    p.region||'', p.city||'', p.state||'', p.owner_manager||'', req.params.id
+    p.region||'', p.city||'', p.state||'', p.owner_manager||'', p.stripe_link||'', req.params.id
   );
   res.json({ ok: true });
 });
@@ -734,6 +734,10 @@ app.post("/api/send-closeout-email", async (req, res) => {
     const rate = job.rate || 0;
     const reportUrl = job.bw_report_url || null;
     
+    // Look up property Stripe link
+    const propDb = job.property_id ? db.prepare("SELECT stripe_link FROM properties WHERE id = ?").get(job.property_id) : null;
+    const stripeLink = propDb?.stripe_link || "";
+    
     const ccList = [owner.cc_email, "lizzy@hostturn.com"].filter(Boolean).join(",");
     
     let photosSection = "";
@@ -744,7 +748,20 @@ app.post("/api/send-closeout-email", async (req, res) => {
     let paymentHtml = "";
     let paymentText = "";
     if (rate > 0) {
-      paymentHtml = `
+      if (stripeLink) {
+        paymentHtml = `
+          <p><strong>Cleaning Fee: $${rate.toFixed(2)}</strong></p>
+          <hr style="border:none;border-top:1px solid #ddd;margin:20px 0;">
+          <p><strong>Payment Options:</strong></p>
+          <p><a href="${stripeLink}" style="display:inline-block;background:#635bff;color:#fff;padding:10px 24px;border-radius:6px;text-decoration:none;font-weight:bold;">Stripe Payment Link</a></p>
+          <p>
+            <strong>Zelle:</strong> pedro@hostturn.com<br>
+            <strong>Venmo:</strong> @Pedro-Zevallos
+          </p>
+          <p>Please remit payment at your earliest opportunity.</p>`;
+        paymentText = `\nCleaning Fee: $${rate.toFixed(2)}\n\nPayment Options:\nStripe Payment Link: ${stripeLink}\nZelle: pedro@hostturn.com\nVenmo: @Pedro-Zevallos\n\nPlease remit payment at your earliest opportunity.`;
+      } else {
+        paymentHtml = `
           <p><strong>Cleaning Fee: $${rate.toFixed(2)}</strong></p>
           <hr style="border:none;border-top:1px solid #ddd;margin:20px 0;">
           <p><strong>Payment Options:</strong></p>
@@ -753,7 +770,8 @@ app.post("/api/send-closeout-email", async (req, res) => {
             <strong>Venmo:</strong> @Pedro-Zevallos
           </p>
           <p>Please remit payment at your earliest opportunity.</p>`;
-      paymentText = `\nCleaning Fee: $${rate.toFixed(2)}\n\nPayment Options:\nZelle: pedro@hostturn.com\nVenmo: @Pedro-Zevallos\n\nPlease remit payment at your earliest opportunity.`;
+        paymentText = `\nCleaning Fee: $${rate.toFixed(2)}\n\nPayment Options:\nZelle: pedro@hostturn.com\nVenmo: @Pedro-Zevallos\n\nPlease remit payment at your earliest opportunity.`;
+      }
     }
     
     const htmlBody = `
@@ -832,6 +850,10 @@ app.post("/api/send-closeout-emails-batch", async (req, res) => {
         const rate = job.rate || 0;
         const reportUrl = job.bw_report_url || null;
         
+        // Look up property Stripe link
+        const propDb = job.property_id ? db.prepare("SELECT stripe_link FROM properties WHERE id = ?").get(job.property_id) : null;
+        const stripeLink = propDb?.stripe_link || "";
+        
         const nodemailer = require("nodemailer");
         const ccList = [owner.cc_email, "lizzy@hostturn.com"].filter(Boolean).join(",");
         
@@ -839,8 +861,13 @@ app.post("/api/send-closeout-emails-batch", async (req, res) => {
         let paymentHtml = "";
         let paymentText = "";
         if (rate > 0) {
-          paymentHtml = `<p><strong>Cleaning Fee: $${rate.toFixed(2)}</strong></p><hr style="border:none;border-top:1px solid #ddd;margin:20px 0;"><p><strong>Payment Options:</strong></p><p><strong>Zelle:</strong> pedro@hostturn.com<br><strong>Venmo:</strong> @Pedro-Zevallos</p><p>Please remit payment at your earliest opportunity.</p>`;
-          paymentText = `\nCleaning Fee: $${rate.toFixed(2)}\n\nPayment Options:\nZelle: pedro@hostturn.com\nVenmo: @Pedro-Zevallos\n\nPlease remit payment at your earliest opportunity.`;
+          if (stripeLink) {
+            paymentHtml = `<p><strong>Cleaning Fee: $${rate.toFixed(2)}</strong></p><hr style="border:none;border-top:1px solid #ddd;margin:20px 0;"><p><strong>Payment Options:</strong></p><p><a href="${stripeLink}" style="display:inline-block;background:#635bff;color:#fff;padding:10px 24px;border-radius:6px;text-decoration:none;font-weight:bold;">Stripe Payment Link</a></p><p><strong>Zelle:</strong> pedro@hostturn.com<br><strong>Venmo:</strong> @Pedro-Zevallos</p><p>Please remit payment at your earliest opportunity.</p>`;
+            paymentText = `\nCleaning Fee: $${rate.toFixed(2)}\n\nPayment Options:\nStripe Payment Link: ${stripeLink}\nZelle: pedro@hostturn.com\nVenmo: @Pedro-Zevallos\n\nPlease remit payment at your earliest opportunity.`;
+          } else {
+            paymentHtml = `<p><strong>Cleaning Fee: $${rate.toFixed(2)}</strong></p><hr style="border:none;border-top:1px solid #ddd;margin:20px 0;"><p><strong>Payment Options:</strong></p><p><strong>Zelle:</strong> pedro@hostturn.com<br><strong>Venmo:</strong> @Pedro-Zevallos</p><p>Please remit payment at your earliest opportunity.</p>`;
+            paymentText = `\nCleaning Fee: $${rate.toFixed(2)}\n\nPayment Options:\nZelle: pedro@hostturn.com\nVenmo: @Pedro-Zevallos\n\nPlease remit payment at your earliest opportunity.`;
+          }
         }
         
         const htmlBody = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;"><div style="background:#1a1d27;padding:20px;border-radius:8px 8px 0 0;"><h2 style="color:#22c55e;margin:0;">HostTurn — Cleaning Complete ✅</h2></div><div style="background:#f9f9f9;padding:24px;border-radius:0 0 8px 8px;"><p>Hi ${owner.name.split(" ")[0]},</p><p>Great news! <strong>${propShort}</strong> has been cleaned and is guest-ready.</p><p><strong>Date:</strong> ${dateStr}</p>${photosSection}${paymentHtml}<p>Thank you for the opportunity to service your home!</p><p style="color:#888;font-size:12px;margin-top:24px;">HostTurn — Short-Term Rental Cleaning<br><a href="https://hostturn.com" style="color:#22c55e;">hostturn.com</a></p></div></div>`;
