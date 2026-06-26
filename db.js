@@ -221,6 +221,7 @@ function initTables() {
   try { db.exec("ALTER TABLE properties ADD COLUMN owner_manager TEXT DEFAULT ''"); } catch(e) {}
   try { db.exec("ALTER TABLE properties ADD COLUMN deep_clean_rate REAL DEFAULT 0"); } catch(e) {}
   try { db.exec("ALTER TABLE properties ADD COLUMN is_manual INTEGER DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE properties ADD COLUMN stripe_link TEXT DEFAULT ''"); } catch(e) {}
 
   // Prospects table for Rate Calculator
   db.exec(`
