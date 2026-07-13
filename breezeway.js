@@ -361,7 +361,7 @@ async function syncTasksForDate(date) {
           "147 deerfield": 185, "18 high street": 190, "4261 vt-103": 100,
           "127 sap bucket": 150, "653 stratton arlington": 150, "761 stratton mt rd": 95,
           "17 cornell way": 100, "8 splatter foot": 140, "8 andover st": 180,
-          "255 valley view": 190
+          "255 valley view": 190, "long trail house #271": 100, "long trail house #361": 100, "long trail house #427": 100
         },
         "magiber duche": {
           "5983 us rt. 4": 135, "okemo mtn lodge a303": 85,
@@ -370,6 +370,12 @@ async function syncTasksForDate(date) {
         },
         "christian": {
           "okemo mtn lodge a309": 80
+        },
+        "ines machala": {
+          "30 golf course": 175, "17 frese rd": 175
+        },
+        "astrid g": {
+          "ocean terrace 500 #7": 144, "ocean terrace 500 #8": 144, "51 hiering ave b3": 100
         }
       };
       
