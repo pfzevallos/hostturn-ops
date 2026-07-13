@@ -375,7 +375,7 @@ async function syncTasksForDate(date) {
           "30 golf course": 175, "17 frese rd": 175
         },
         "astrid g": {
-          "ocean terrace 500 #7": 144, "ocean terrace 500 #8": 144, "51 hiering ave b3": 100
+          "ocean terrace 500 #3": 144, "ocean terrace 500 #7": 144, "ocean terrace 500 #8": 144, "51 hiering ave b3": 100
         }
       };
       
