@@ -161,25 +161,30 @@ async function syncTasksForDate(date) {
   console.log(`[BW] Task sync: checked ${checkedCount} props, ${errorCount} errors, found ${allTasks.length} tasks for ${date}`);
 
   // Remove stale jobs that no longer exist in Breezeway for this date
-  // Jobs that have been finished, invoiced, or have payment data are ALWAYS preserved
-  // Jobs with no meaningful data are removed (they were likely rescheduled or deleted on Breezeway)
-  const bwTaskIds = allTasks.map(t => String(parseInt(t.id, 10)));
-  const existingJobs = db.prepare("SELECT * FROM jobs WHERE date = ?").all(date);
-  for (const ej of existingJobs) {
-    if (ej.bw_task_id) {
-      const normalizedId = String(parseInt(ej.bw_task_id, 10));
-      if (!bwTaskIds.includes(normalizedId)) {
-        // Check if this job has meaningful data we should preserve
-        const isFinished = ['finished','closed','completed'].includes((ej.bw_status||'').toLowerCase());
-        const hasPaymentData = ej.owner_paid_at || ej.cleaner_paid_at || ej.closeout_email_sent_at;
-        const hasCheckboxes = ej.arrival_confirmed_at || ej.report_verified_at;
-        
-        if (isFinished || hasPaymentData || hasCheckboxes) {
-          console.log(`[BW] Keeping job ${ej.id} (task ${ej.bw_task_id}) for ${date} - has meaningful data`);
-        } else {
-          db.prepare("DELETE FROM job_steps WHERE job_id = ?").run(ej.id);
-          db.prepare("DELETE FROM jobs WHERE id = ?").run(ej.id);
-          console.log(`[BW] Removed rescheduled/deleted job ${ej.id} (task ${ej.bw_task_id}) for ${date}`);
+  // CRITICAL: Skip cleanup entirely if there were API errors - don't delete jobs during Breezeway outages
+  if (errorCount > 0 && checkedCount === 0) {
+    console.log(`[BW] Skipping stale cleanup for ${date} - all ${errorCount} API calls failed (Breezeway may be down)`);
+  } else {
+    // Jobs that have been finished, invoiced, or have payment data are ALWAYS preserved
+    // Jobs with no meaningful data are removed (they were likely rescheduled or deleted on Breezeway)
+    const bwTaskIds = allTasks.map(t => String(parseInt(t.id, 10)));
+    const existingJobs = db.prepare("SELECT * FROM jobs WHERE date = ?").all(date);
+    for (const ej of existingJobs) {
+      if (ej.bw_task_id) {
+        const normalizedId = String(parseInt(ej.bw_task_id, 10));
+        if (!bwTaskIds.includes(normalizedId)) {
+          // Check if this job has meaningful data we should preserve
+          const isFinished = ['finished','closed','completed'].includes((ej.bw_status||'').toLowerCase());
+          const hasPaymentData = ej.owner_paid_at || ej.cleaner_paid_at || ej.closeout_email_sent_at;
+          const hasCheckboxes = ej.arrival_confirmed_at || ej.report_verified_at;
+          
+          if (isFinished || hasPaymentData || hasCheckboxes) {
+            console.log(`[BW] Keeping job ${ej.id} (task ${ej.bw_task_id}) for ${date} - has meaningful data`);
+          } else {
+            db.prepare("DELETE FROM job_steps WHERE job_id = ?").run(ej.id);
+            db.prepare("DELETE FROM jobs WHERE id = ?").run(ej.id);
+            console.log(`[BW] Removed rescheduled/deleted job ${ej.id} (task ${ej.bw_task_id}) for ${date}`);
+          }
         }
       }
     }
