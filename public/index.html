@@ -702,6 +702,11 @@
     document.getElementById('p-end').value = todayDate;
     
     async function loadPayments() {
+      // Always refresh dates so the filter range is current
+      refreshDates();
+      var thirtyDaysAgo = getLocalDate(-30);
+      document.getElementById('p-start').value = document.getElementById('p-start').value || thirtyDaysAgo;
+      document.getElementById('p-end').value = todayDate;
       var start = document.getElementById('p-start').value || thirtyDaysAgo;
       var end = document.getElementById('p-end').value || todayDate;
       try {
