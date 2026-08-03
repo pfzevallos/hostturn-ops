@@ -57,13 +57,34 @@ function saveTokens(access, refresh) {
 
 // === API CALLS ===
 
-async function bwFetch(path) {
-  const token = await getToken();
-  const res = await fetch(`${BW_BASE}/inventory/v1${path}`, {
-    headers: { Authorization: `JWT ${token}`, accept: "application/json" },
-  });
-  if (!res.ok) throw new Error(`BW API ${path}: ${res.status}`);
-  return res.json();
+async function bwFetch(path, retries = 3) {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const token = await getToken();
+      const res = await fetch(`${BW_BASE}/inventory/v1${path}`, {
+        headers: { Authorization: `JWT ${token}`, accept: "application/json" },
+      });
+      if (res.status === 503 || res.status === 429 || res.status >= 500) {
+        if (attempt < retries) {
+          const delay = attempt * 2000; // 2s, 4s, 6s
+          console.log(`[BW] ${path} returned ${res.status}, retrying in ${delay/1000}s (attempt ${attempt}/${retries})`);
+          await new Promise(r => setTimeout(r, delay));
+          continue;
+        }
+        throw new Error(`BW API ${path}: ${res.status} after ${retries} retries`);
+      }
+      if (!res.ok) throw new Error(`BW API ${path}: ${res.status}`);
+      return res.json();
+    } catch (e) {
+      if (attempt < retries && (e.message.includes('503') || e.message.includes('ETIMEDOUT') || e.message.includes('ECONNRESET'))) {
+        const delay = attempt * 2000;
+        console.log(`[BW] ${path} error: ${e.message}, retrying in ${delay/1000}s (attempt ${attempt}/${retries})`);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      throw e;
+    }
+  }
 }
 
 // Fetch and cache all properties
@@ -140,6 +161,10 @@ async function syncTasksForDate(date) {
   let checkedCount = 0;
   for (const prop of props) {
     try {
+      // Small delay between API calls to avoid rate limiting
+      if (checkedCount > 0 && checkedCount % 10 === 0) {
+        await new Promise(r => setTimeout(r, 1000));
+      }
       const rawTasks = await bwFetch(`/task?home_id=${Math.round(prop.id)}`);
       checkedCount++;
       // Handle paginated response - tasks may be in results wrapper
