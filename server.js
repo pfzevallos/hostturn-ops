@@ -976,23 +976,49 @@ cron.schedule("*/15 * * * *", async () => {
   try { await auto.checkProgress(); } catch (e) { console.error("[CRON] Progress check error:", e.message); }
 });
 
-// 6:00 AM: Sync today's tasks from Breezeway
+// Helper: get Eastern time date string with offset
+function getEasternDate(offsetDays) {
+  const d = new Date();
+  if (offsetDays) d.setDate(d.getDate() + offsetDays);
+  return d.toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+}
+
+// Every 30 minutes: sync today's tasks (catches status changes and new tasks)
+cron.schedule("*/30 * * * *", async () => {
+  try {
+    const today = getEasternDate(0);
+    console.log(`[CRON] Regular sync for ${today}`);
+    await bw.syncTasksForDate(today);
+  } catch (e) { console.error("[CRON] Regular sync error:", e.message); }
+});
+
+// 6:00 AM: Full sync - yesterday, today, tomorrow, day after
 cron.schedule("0 6 * * *", async () => {
   try {
-    const date = new Date().toISOString().split("T")[0];
-    console.log(`[CRON] Morning sync for ${date}`);
-    await bw.syncTasksForDate(date);
+    console.log("[CRON] Morning full sync");
+    await bw.syncTasksForDate(getEasternDate(-1));
+    await bw.syncTasksForDate(getEasternDate(0));
+    await bw.syncTasksForDate(getEasternDate(1));
+    await bw.syncTasksForDate(getEasternDate(2));
   } catch (e) { console.error("[CRON] Morning sync error:", e.message); }
 });
 
-// 6:00 PM: Sync tomorrow's tasks and prepare next-day comms
+// 12:00 PM: Midday sync - today and tomorrow
+cron.schedule("0 12 * * *", async () => {
+  try {
+    console.log("[CRON] Midday sync");
+    await bw.syncTasksForDate(getEasternDate(0));
+    await bw.syncTasksForDate(getEasternDate(1));
+  } catch (e) { console.error("[CRON] Midday sync error:", e.message); }
+});
+
+// 6:00 PM: Evening sync - today, tomorrow, day after
 cron.schedule("0 18 * * *", async () => {
   try {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const date = tomorrow.toISOString().split("T")[0];
-    console.log(`[CRON] Evening sync for ${date}`);
-    await bw.syncTasksForDate(date);
+    console.log("[CRON] Evening sync");
+    await bw.syncTasksForDate(getEasternDate(0));
+    await bw.syncTasksForDate(getEasternDate(1));
+    await bw.syncTasksForDate(getEasternDate(2));
   } catch (e) { console.error("[CRON] Evening sync error:", e.message); }
 });
 
