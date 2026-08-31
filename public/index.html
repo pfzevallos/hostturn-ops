@@ -696,18 +696,18 @@
     // Payment tracker
     var paymentData = { jobs: [], summary: {} };
     
-    // Set default date range (past 30 days to today)
-    var thirtyDaysAgo = getLocalDate(-30);
-    document.getElementById('p-start').value = thirtyDaysAgo;
+    // Set default date range (past 90 days to today)
+    var ninetyDaysAgo = getLocalDate(-90);
+    document.getElementById('p-start').value = ninetyDaysAgo;
     document.getElementById('p-end').value = todayDate;
     
     async function loadPayments() {
       // Always refresh dates so the filter range is current
       refreshDates();
-      var thirtyDaysAgo = getLocalDate(-30);
-      document.getElementById('p-start').value = document.getElementById('p-start').value || thirtyDaysAgo;
+      var ninetyDaysAgo = getLocalDate(-90);
+      document.getElementById('p-start').value = document.getElementById('p-start').value || ninetyDaysAgo;
       document.getElementById('p-end').value = todayDate;
-      var start = document.getElementById('p-start').value || thirtyDaysAgo;
+      var start = document.getElementById('p-start').value || ninetyDaysAgo;
       var end = document.getElementById('p-end').value || todayDate;
       try {
         var r = await fetch('/api/payment-tracker?start=' + start + '&end=' + end);
