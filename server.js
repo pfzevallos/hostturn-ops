@@ -49,7 +49,7 @@ const PORT = process.env.PORT || 3000;
 // --- Jobs ---
 app.get("/api/jobs", (req, res) => {
   const db = getDb();
-  const date = req.query.date || new Date().toISOString().split("T")[0];
+  const date = req.query.date || getEasternDate(0);
   const jobs = db.prepare("SELECT * FROM jobs WHERE date = ? ORDER BY expected_arrival").all(date);
   // Attach steps
   for (const job of jobs) {
@@ -105,7 +105,7 @@ app.post("/api/jobs/:id/send/:step", async (req, res) => {
 app.post("/api/bulk-send/:step", async (req, res) => {
   try {
     const db = getDb();
-    const date = req.body.date || new Date().toISOString().split("T")[0];
+    const date = req.body.date || getEasternDate(0);
     const jobs = db.prepare("SELECT j.* FROM jobs j JOIN job_steps js ON j.id = js.job_id WHERE j.date = ? AND js.step_key = ? AND js.status = 'pending'")
       .all(date, req.params.step);
     let sent = 0;
@@ -158,7 +158,7 @@ app.put("/api/templates/:step/:lang", (req, res) => {
 
 // --- Messages log ---
 app.get("/api/messages", (req, res) => {
-  const date = req.query.date || new Date().toISOString().split("T")[0];
+  const date = req.query.date || getEasternDate(0);
   res.json(getDb().prepare("SELECT * FROM messages WHERE created_at LIKE ? ORDER BY created_at DESC").all(date + "%"));
 });
 
@@ -173,7 +173,7 @@ app.patch("/api/messages/:id/resolve", (req, res) => {
 
 // --- Payments ---
 app.get("/api/payments", (req, res) => {
-  const date = req.query.date || new Date().toISOString().split("T")[0];
+  const date = req.query.date || getEasternDate(0);
   res.json(getDb().prepare("SELECT * FROM payments WHERE date = ? ORDER BY property_name").all(date));
 });
 
@@ -449,7 +449,7 @@ app.post("/api/properties/set-rates", (req, res) => {
 
 app.post("/api/sync/tasks", async (req, res) => {
   try {
-    const date = req.body.date || new Date().toISOString().split("T")[0];
+    const date = req.body.date || getEasternDate(0);
     const count = await bw.syncTasksForDate(date);
     res.json({ count, date });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -932,7 +932,7 @@ app.get("/api/auto-log", (req, res) => {
 // --- Stats ---
 app.get("/api/stats", (req, res) => {
   const db = getDb();
-  const date = req.query.date || new Date().toISOString().split("T")[0];
+  const date = req.query.date || getEasternDate(0);
   const jobs = db.prepare("SELECT * FROM jobs WHERE date = ?").all(date);
   const msgs = db.prepare("SELECT * FROM messages WHERE created_at LIKE ? AND direction = 'out'").all(date + "%");
   const escalations = db.prepare("SELECT COUNT(*) as c FROM messages WHERE is_escalation = 1 AND is_resolved = 0").get();
