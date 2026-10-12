@@ -490,6 +490,31 @@ app.post("/api/properties/set-tags", (req, res) => {
   res.json({ updated, total_properties: props.length });
 });
 
+// Remove specific tags from properties by keyword matching
+app.post("/api/properties/remove-tags", (req, res) => {
+  const db = getDb();
+  const removals = req.body.removals; // { "keyword": "TAG1,TAG2", ... }
+  if (!removals) return res.status(400).json({ error: "removals object required" });
+  
+  const props = db.prepare("SELECT * FROM properties").all();
+  let updated = 0;
+  
+  for (const [keyword, tagsToRemove] of Object.entries(removals)) {
+    const kw = keyword.toLowerCase();
+    const removeSet = tagsToRemove.split(',').map(t => t.trim().toUpperCase());
+    for (const p of props) {
+      if (p.name && p.name.toLowerCase().includes(kw)) {
+        const existing = (p.tags || '').split(',').map(t => t.trim()).filter(Boolean);
+        const filtered = existing.filter(t => !removeSet.includes(t.toUpperCase()));
+        db.prepare("UPDATE properties SET tags = ? WHERE id = ?").run(filtered.join(','), p.id);
+        updated++;
+      }
+    }
+  }
+  
+  res.json({ updated, total_properties: props.length });
+});
+
 app.post("/api/sync/tasks", async (req, res) => {
   try {
     const date = req.body.date || getEasternDate(0);
