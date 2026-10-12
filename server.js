@@ -56,6 +56,13 @@ app.get("/api/jobs", (req, res) => {
     job.steps = {};
     const steps = db.prepare("SELECT step_key, status, sent_at FROM job_steps WHERE job_id = ?").all(job.id);
     for (const s of steps) job.steps[s.step_key] = { status: s.status, sent_at: s.sent_at };
+    // Attach tags from properties table
+    if (job.property_id) {
+      const prop = db.prepare("SELECT tags FROM properties WHERE id = ?").get(job.property_id);
+      job.tags = (prop && prop.tags) || '';
+    } else {
+      job.tags = '';
+    }
   }
   res.json(jobs);
 });
@@ -279,6 +286,16 @@ app.get("/api/payment-tracker", (req, res) => {
     ORDER BY date DESC, property_name
   `).all(startDate, endDate);
   
+  // Attach tags from properties
+  for (const job of jobs) {
+    if (job.property_id) {
+      const prop = db.prepare("SELECT tags FROM properties WHERE id = ?").get(job.property_id);
+      job.tags = (prop && prop.tags) || '';
+    } else {
+      job.tags = '';
+    }
+  }
+
   // Filter out admin jobs (Pedro/Lizzy are company owners, not cleaners)
   const ADMIN_NAMES = ["pedro zevallos", "lizzy zevallos", "elizabeth zevallos"];
   const finished = jobs.filter(j => {
@@ -439,6 +456,32 @@ app.post("/api/properties/set-rates", (req, res) => {
         db.prepare("UPDATE properties SET rate = ? WHERE id = ?").run(rate, p.id);
         // Also update any existing jobs for this property
         db.prepare("UPDATE jobs SET rate = ? WHERE property_id = ? AND rate = 0").run(rate, p.id);
+        updated++;
+      }
+    }
+  }
+  
+  res.json({ updated, total_properties: props.length });
+});
+
+// Set tags on properties by keyword matching (same pattern as set-rates)
+app.post("/api/properties/set-tags", (req, res) => {
+  const db = getDb();
+  const tags = req.body.tags; // { "keyword": "TAG1,TAG2", ... }
+  if (!tags) return res.status(400).json({ error: "tags object required" });
+  
+  const props = db.prepare("SELECT * FROM properties").all();
+  let updated = 0;
+  
+  for (const [keyword, tagValue] of Object.entries(tags)) {
+    const kw = keyword.toLowerCase();
+    for (const p of props) {
+      if (p.name && p.name.toLowerCase().includes(kw)) {
+        // Merge tags: add new ones without removing existing
+        const existing = (p.tags || '').split(',').map(t => t.trim()).filter(Boolean);
+        const newTags = tagValue.split(',').map(t => t.trim()).filter(Boolean);
+        const merged = [...new Set([...existing, ...newTags])].join(',');
+        db.prepare("UPDATE properties SET tags = ? WHERE id = ?").run(merged, p.id);
         updated++;
       }
     }
