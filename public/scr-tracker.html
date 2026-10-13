@@ -313,12 +313,12 @@
 
     // Pre-schedule: before Oct 8
     if (d < new Date('2026-10-08T12:00:00')) {
-      return { start: '2026-09-25', end: '2026-10-07', payDate: null, label: 'Pre-Payment Schedule', special: true };
+      return { start: '2026-09-25', end: '2026-10-07', payDate: null, label: 'Payment 1 (Special)', special: true };
     }
 
     // Special first period: Oct 8&ndash;13
     if (d <= new Date('2026-10-13T12:00:00')) {
-      return { start: '2026-10-08', end: '2026-10-13', payDate: '2026-10-13', label: 'Pay Period 1 (Special)', special: true };
+      return { start: '2026-10-08', end: '2026-10-13', payDate: '2026-10-13', label: 'Payment 2 (Special)', special: true };
     }
 
     // Regular Wed&ndash;Tue periods
@@ -813,12 +813,12 @@ function togglePeriod(header) {
 
     // Pre-schedule: before Oct 8
     if (d < new Date('2026-10-08T12:00:00')) {
-      return { start: '2026-09-25', end: '2026-10-07', payDate: null, label: 'Pre-Payment Schedule', special: true };
+      return { start: '2026-09-25', end: '2026-10-07', payDate: null, label: 'Payment 1 (Special)', special: true };
     }
 
     // Special first period: Oct 8&ndash;13
     if (d <= new Date('2026-10-13T12:00:00')) {
-      return { start: '2026-10-08', end: '2026-10-13', payDate: '2026-10-13', label: 'Pay Period 1 (Special)', special: true };
+      return { start: '2026-10-08', end: '2026-10-13', payDate: '2026-10-13', label: 'Payment 2 (Special)', special: true };
     }
 
     // Regular Wed&ndash;Tue periods
