@@ -3,6 +3,506 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SCR Payment Tracker &mdash; HostTurn Ops</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: #0f1117;
+      color: #e4e6f0;
+      min-height: 100vh;
+    }
+
+    /* Top bar */
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #1a1d27;
+      padding: 16px 24px;
+      border-bottom: 1px solid #2e3348;
+    }
+    .top-bar h1 {
+      font-size: 20px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .top-bar h1 a {
+      color: #8b8fa8;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .top-bar h1 a:hover { color: #e4e6f0; }
+    .top-bar .status {
+      font-size: 13px;
+      color: #8b8fa8;
+    }
+    .top-bar .status .dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #22c55e;
+      margin-right: 6px;
+    }
+
+    /* Container */
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    /* Summary cards */
+    .summary-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .summary-card {
+      background: #1a1d27;
+      border: 1px solid #2e3348;
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .summary-card .label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: #8b8fa8;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+    .summary-card .value {
+      font-size: 28px;
+      font-weight: 700;
+    }
+    .summary-card .sub {
+      font-size: 13px;
+      color: #8b8fa8;
+      margin-top: 4px;
+    }
+    .green { color: #22c55e; }
+    .amber { color: #f59e0b; }
+    .red { color: #ef4444; }
+    .blue { color: #3b82f6; }
+    .purple { color: #a855f7; }
+
+    /* Pay period sections */
+    .period-section {
+      background: #1a1d27;
+      border: 1px solid #2e3348;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+    .period-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      cursor: pointer;
+      user-select: none;
+      border-bottom: 1px solid #2e3348;
+    }
+    .period-header:hover { background: rgba(255,255,255,0.02); }
+    .period-header .left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .period-header .arrow {
+      font-size: 12px;
+      color: #8b8fa8;
+      transition: transform 0.2s;
+    }
+    .period-header.collapsed .arrow { transform: rotate(-90deg); }
+    .period-header .period-name {
+      font-size: 15px;
+      font-weight: 600;
+    }
+    .period-header .period-dates {
+      font-size: 13px;
+      color: #8b8fa8;
+    }
+    .period-header .right {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    .period-header .amount {
+      font-size: 18px;
+      font-weight: 700;
+    }
+    .period-header .status-badge {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 6px;
+    }
+    .badge-unpaid {
+      background: rgba(245, 158, 11, 0.15);
+      color: #f59e0b;
+    }
+    .badge-paid {
+      background: rgba(34, 197, 94, 0.15);
+      color: #22c55e;
+    }
+    .badge-partial {
+      background: rgba(239, 68, 68, 0.15);
+      color: #ef4444;
+    }
+    .badge-pre {
+      background: rgba(139, 143, 168, 0.15);
+      color: #8b8fa8;
+    }
+
+    /* Period body */
+    .period-body { display: block; }
+    .period-body.hidden { display: none; }
+
+    /* Jobs table */
+    .jobs-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .jobs-table th {
+      text-align: left;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: #8b8fa8;
+      letter-spacing: 0.5px;
+      padding: 10px 20px;
+      border-bottom: 1px solid #2e3348;
+    }
+    .jobs-table td {
+      padding: 10px 20px;
+      font-size: 14px;
+      border-bottom: 1px solid rgba(46, 51, 72, 0.5);
+    }
+    .jobs-table tr:last-child td { border-bottom: none; }
+    .jobs-table .date { color: #8b8fa8; width: 100px; }
+    .jobs-table .rate {
+      text-align: right;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Payment summary row */
+    .payment-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      background: rgba(34, 197, 94, 0.05);
+      border-top: 1px solid #2e3348;
+    }
+    .payment-row .left-info {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    .payment-row .total-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #8b8fa8;
+    }
+    .payment-row .total-amount {
+      font-size: 18px;
+      font-weight: 700;
+      color: #22c55e;
+    }
+    .payment-row .cleans-count {
+      font-size: 13px;
+      color: #8b8fa8;
+    }
+    .payment-row .payment-date {
+      font-size: 13px;
+      color: #8b8fa8;
+    }
+
+    /* Loading */
+    .loading {
+      text-align: center;
+      padding: 60px;
+      color: #8b8fa8;
+      font-size: 15px;
+    }
+    .loading .spinner {
+      display: inline-block;
+      width: 24px; height: 24px;
+      border: 3px solid #2e3348;
+      border-top-color: #22c55e;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 12px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Info note */
+    .info-note {
+      background: rgba(59, 130, 246, 0.08);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      font-size: 13px;
+      color: #93a3c0;
+      line-height: 1.5;
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      .container { padding: 16px; }
+      .summary-row { grid-template-columns: 1fr 1fr; gap: 10px; }
+      .summary-card { padding: 14px; }
+      .summary-card .value { font-size: 22px; }
+      .period-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+      .period-header .right { width: 100%; justify-content: space-between; }
+      .jobs-table th, .jobs-table td { padding: 8px 12px; font-size: 13px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="top-bar">
+  <h1>
+    &#x1F4B0; SCR Payment Tracker
+    <a href="/">&#x2190; Back to Dashboard</a>
+  </h1>
+  <div class="status">
+    <span class="dot"></span>Live from Breezeway
+  </div>
+</div>
+
+<div class="container">
+  <div class="info-note">
+    <strong>Pay Schedule:</strong> SCR pays every Tuesday for the previous Wed&ndash;Tue period.
+    First payment (Oct 13): covers Oct 8&ndash;13 only (Wed Oct 7 was already paid separately).
+  </div>
+
+  <div class="summary-row" id="summary-cards">
+    <!-- Filled by JS -->
+  </div>
+
+  <div id="periods-container">
+    <div class="loading">
+      <div class="spinner"></div><br>
+      Loading SCR jobs...
+    </div>
+  </div>
+</div>
+
+<script>
+(async function() {
+  // Fetch SCR jobs
+  const resp = await fetch('/api/payment-tracker?days=120');
+  const data = await resp.json();
+  const allJobs = (data.jobs || data)
+    .filter(j => j.tags && j.tags.includes('SCR') && j.bw_status === 'Finished')
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  // Pay period calculation
+  function getPayPeriod(dateStr) {
+    const d = new Date(dateStr + 'T12:00:00');
+
+    // Pre-schedule: before Oct 8
+    if (d < new Date('2026-10-08T12:00:00')) {
+      return { start: '2026-09-25', end: '2026-10-07', payDate: null, label: 'Pre-Payment Schedule', special: true };
+    }
+
+    // Special first period: Oct 8&ndash;13
+    if (d <= new Date('2026-10-13T12:00:00')) {
+      return { start: '2026-10-08', end: '2026-10-13', payDate: '2026-10-13', label: 'Pay Period 1 (Special)', special: true };
+    }
+
+    // Regular Wed&ndash;Tue periods
+    const dow = d.getDay(); // 0=Sun
+    let daysToTue;
+    if (dow <= 2) { daysToTue = 2 - dow; }
+    else { daysToTue = (2 + 7 - dow); }
+    const endDate = new Date(d);
+    endDate.setDate(endDate.getDate() + daysToTue);
+    const startDate = new Date(endDate);
+    startDate.setDate(startDate.getDate() - 6);
+
+    const fmt = dt => dt.toISOString().split('T')[0];
+    return {
+      start: fmt(startDate),
+      end: fmt(endDate),
+      payDate: fmt(endDate),
+      label: null,
+      special: false
+    };
+  }
+
+  function formatDate(dateStr) {
+    const d = new Date(dateStr + 'T12:00:00');
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
+  function formatDateRange(start, end) {
+    const s = new Date(start + 'T12:00:00');
+    const e = new Date(end + 'T12:00:00');
+    const sMonth = s.toLocaleDateString('en-US', { month: 'short' });
+    const eMonth = e.toLocaleDateString('en-US', { month: 'short' });
+    if (sMonth === eMonth) {
+      return `${sMonth} ${s.getDate()}&ndash;${e.getDate()}`;
+    }
+    return `${sMonth} ${s.getDate()} &ndash; ${eMonth} ${e.getDate()}`;
+  }
+
+  function formatDayOfWeek(dateStr) {
+    const d = new Date(dateStr + 'T12:00:00');
+    return d.toLocaleDateString('en-US', { weekday: 'short' });
+  }
+
+  function cleanPropertyName(name) {
+    // Remove VT prefix
+    name = name.replace(/^VT, (Stowe|Stratton|Ludlow|Dover)-/, '');
+    // If there's a parenthetical, pick the shorter/friendlier name
+    const match = name.match(/^(.+?)\s*\(([^)]+)\)$/);
+    if (match) {
+      return match[1].length < match[2].length ? match[1].trim() : match[2].trim();
+    }
+    return name.trim();
+  }
+
+  // Group by pay period
+  const periods = {};
+  allJobs.forEach(j => {
+    const pp = getPayPeriod(j.date);
+    const key = pp.start + '_' + pp.end;
+    if (!periods[key]) {
+      periods[key] = { ...pp, jobs: [], total: 0 };
+    }
+    periods[key].jobs.push(j);
+    periods[key].total += j.rate;
+  });
+
+  const sortedPeriods = Object.values(periods).sort((a, b) => b.start.localeCompare(a.start)); // Newest first
+
+  // Summary cards
+  const totalDue = sortedPeriods.reduce((s, p) => s + p.total, 0);
+  const totalPeriods = sortedPeriods.filter(p => p.payDate).length;
+  const totalCleans = allJobs.length;
+  const uniqueProperties = new Set(allJobs.map(j => cleanPropertyName(j.property_name))).size;
+
+  document.getElementById('summary-cards').innerHTML = `
+    <div class="summary-card">
+      <div class="label">Total Revenue</div>
+      <div class="value green">$${totalDue.toLocaleString()}</div>
+      <div class="sub">${totalCleans} completed cleans</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">Pay Periods</div>
+      <div class="value blue">${totalPeriods}</div>
+      <div class="sub">Tue payment cycles</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">SCR Properties</div>
+      <div class="value purple">${uniqueProperties}</div>
+      <div class="sub">Unique properties cleaned</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">Avg Per Period</div>
+      <div class="value amber">$${totalPeriods > 0 ? Math.round(totalDue / totalPeriods).toLocaleString() : 0}</div>
+      <div class="sub">Per pay cycle</div>
+    </div>
+  `;
+
+  // Render periods
+  let html = '';
+  sortedPeriods.forEach((period, idx) => {
+    const dateRange = formatDateRange(period.start, period.end);
+    const periodName = period.label || `Pay Period`;
+    const payDateStr = period.payDate ? `Payment: ${formatDayOfWeek(period.payDate)} ${formatDate(period.payDate)}` : 'Pre-schedule';
+
+    // Determine status
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const payDate = period.payDate ? new Date(period.payDate + 'T12:00:00') : null;
+    let statusBadge;
+    if (!period.payDate) {
+      statusBadge = '<span class="status-badge badge-pre">Pre-Schedule</span>';
+    } else {
+      // For now all are UNPAID since we don't have payment tracking in the DB yet
+      statusBadge = '<span class="status-badge badge-unpaid">Unpaid</span>';
+    }
+
+    const isCollapsed = idx > 1; // Collapse older periods by default
+
+    html += `
+    <div class="period-section">
+      <div class="period-header ${isCollapsed ? 'collapsed' : ''}" onclick="togglePeriod(this)">
+        <div class="left">
+          <span class="arrow">&#x25BC;</span>
+          <div>
+            <div class="period-name">${periodName}</div>
+            <div class="period-dates">${dateRange} &middot; ${payDateStr}</div>
+          </div>
+        </div>
+        <div class="right">
+          <span class="amount green">$${period.total.toLocaleString()}</span>
+          ${statusBadge}
+        </div>
+      </div>
+      <div class="period-body ${isCollapsed ? 'hidden' : ''}">
+        <table class="jobs-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Property</th>
+              <th>Cleaner</th>
+              <th style="text-align:right">Rate</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${period.jobs.map(j => `
+              <tr>
+                <td class="date">${formatDayOfWeek(j.date)} ${formatDate(j.date)}</td>
+                <td>${cleanPropertyName(j.property_name)}</td>
+                <td style="color:#8b8fa8">${(j.cleaner_name || 'Unassigned').replace(/'s Company$/, '')}</td>
+                <td class="rate">$${j.rate}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        <div class="payment-row">
+          <div class="left-info">
+            <div>
+              <span class="total-label">Period Total</span>
+              <span class="total-amount" style="margin-left:10px">$${period.total.toLocaleString()}</span>
+            </div>
+            <span class="cleans-count">${period.jobs.length} cleans</span>
+          </div>
+          <div class="payment-date">${payDateStr}</div>
+        </div>
+      </div>
+    </div>`;
+  });
+
+  document.getElementById('periods-container').innerHTML = html;
+})();
+
+function togglePeriod(header) {
+  header.classList.toggle('collapsed');
+  const body = header.nextElementSibling;
+  body.classList.toggle('hidden');
+}
+</script>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SCR Payment Tracker â HostTurn Ops</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
