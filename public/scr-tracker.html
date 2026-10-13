@@ -503,7 +503,7 @@ function togglePeriod(header) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SCR Payment Tracker â HostTurn Ops</title>
+  <title>SCR Payment Tracker &mdash; HostTurn Ops</title>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -772,8 +772,8 @@ function togglePeriod(header) {
 
 <div class="top-bar">
   <h1>
-    ð° SCR Payment Tracker
-    <a href="/">â Back to Dashboard</a>
+    &#x1F4B0; SCR Payment Tracker
+    <a href="/">&#x2190; Back to Dashboard</a>
   </h1>
   <div class="status">
     <span class="dot"></span>Live from Breezeway
@@ -782,8 +782,8 @@ function togglePeriod(header) {
 
 <div class="container">
   <div class="info-note">
-    <strong>Pay Schedule:</strong> SCR pays every Tuesday for the previous WedâTue period.
-    First payment (Oct 13): covers Oct 8â13 only (Wed Oct 7 was already paid separately).
+    <strong>Pay Schedule:</strong> SCR pays every Tuesday for the previous Wed&ndash;Tue period.
+    First payment (Oct 13): covers Oct 8&ndash;13 only (Wed Oct 7 was already paid separately).
   </div>
 
   <div class="summary-row" id="summary-cards">
@@ -816,12 +816,12 @@ function togglePeriod(header) {
       return { start: '2026-09-25', end: '2026-10-07', payDate: null, label: 'Pre-Payment Schedule', special: true };
     }
 
-    // Special first period: Oct 8â13
+    // Special first period: Oct 8&ndash;13
     if (d <= new Date('2026-10-13T12:00:00')) {
       return { start: '2026-10-08', end: '2026-10-13', payDate: '2026-10-13', label: 'Pay Period 1 (Special)', special: true };
     }
 
-    // Regular WedâTue periods
+    // Regular Wed&ndash;Tue periods
     const dow = d.getDay(); // 0=Sun
     let daysToTue;
     if (dow <= 2) { daysToTue = 2 - dow; }
@@ -852,9 +852,9 @@ function togglePeriod(header) {
     const sMonth = s.toLocaleDateString('en-US', { month: 'short' });
     const eMonth = e.toLocaleDateString('en-US', { month: 'short' });
     if (sMonth === eMonth) {
-      return `${sMonth} ${s.getDate()}â${e.getDate()}`;
+      return `${sMonth} ${s.getDate()}&ndash;${e.getDate()}`;
     }
-    return `${sMonth} ${s.getDate()} â ${eMonth} ${e.getDate()}`;
+    return `${sMonth} ${s.getDate()} &ndash; ${eMonth} ${e.getDate()}`;
   }
 
   function formatDayOfWeek(dateStr) {
@@ -941,10 +941,10 @@ function togglePeriod(header) {
     <div class="period-section">
       <div class="period-header ${isCollapsed ? 'collapsed' : ''}" onclick="togglePeriod(this)">
         <div class="left">
-          <span class="arrow">â¼</span>
+          <span class="arrow">&#x25BC;</span>
           <div>
             <div class="period-name">${periodName}</div>
-            <div class="period-dates">${dateRange} Â· ${payDateStr}</div>
+            <div class="period-dates">${dateRange} &middot; ${payDateStr}</div>
           </div>
         </div>
         <div class="right">
