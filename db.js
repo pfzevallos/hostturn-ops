@@ -158,27 +158,27 @@ function initTables() {
       // ENGLISH
       ["owner_confirm", "en", "Hi {{owner}}, this is HostTurn. We have {{property}} scheduled for cleaning tomorrow. Can you confirm the checkout time is {{checkout_time}}? Thank you!"],
       ["cleaner_sched", "en", "Hi {{cleaner}}, here's your schedule for tomorrow:\n{{job_list}}\nPlease confirm you're all set!"],
-      ["morning", "en", "Good morning {{cleaner}}! Confirming you're on track for today. First job: {{property}} — checkout {{checkout_time}}. Let me know when you're heading out!"],
+      ["morning", "en", "Good morning {{cleaner}}! Confirming you're on track for today. First job: {{property}} â checkout {{checkout_time}}. Let me know when you're heading out!"],
       ["arrival_started", "en", "Great {{cleaner}}, we see you started at {{property}}! Quick reminders:\n{{property_notes}}\nLet us know if you need anything."],
-      ["arrival_late", "en", "Hi {{cleaner}}, checking in — we expected you at {{property}} by {{expected_arrival}} but haven't seen a start in Breezeway yet. What's your ETA? Please update us."],
+      ["arrival_late", "en", "Hi {{cleaner}}, checking in â we expected you at {{property}} by {{expected_arrival}} but haven't seen a start in Breezeway yet. What's your ETA? Please update us."],
       ["arrival_next_job", "en", "Hi {{cleaner}}, great work finishing {{prev_property}}! Your next job is {{property}}. Please head over and hit START in Breezeway when you arrive."],
       ["arrival_next_late", "en", "Hi {{cleaner}}, it's been a while since you finished {{prev_property}}. Are you on your way to {{property}}? Please let us know your ETA."],
       ["progress", "en", "Hey {{cleaner}}, how's it going at {{property}}? Need to finish by {{finish_by}} to stay on schedule. Let us know if any issues!"],
-      ["end_verify", "en", "{{cleaner}} — before marking {{property}} complete, please upload all photos to Breezeway. Double check: beds, bathrooms, kitchen, floors."],
+      ["end_verify", "en", "{{cleaner}} â before marking {{property}} complete, please upload all photos to Breezeway. Double check: beds, bathrooms, kitchen, floors."],
       ["finishing", "en", "[Admin] Review photos for {{property}} ({{cleaner}}). Note any issues for next clean."],
-      ["close_out", "en", "Hi {{owner}}, {{property}} has been cleaned and is guest-ready! Invoice: ${{rate}}. Completion photos are in Breezeway. Please remit payment at your convenience. Thank you! — HostTurn"],
+      ["close_out", "en", "Hi {{owner}}, {{property}} has been cleaned and is guest-ready! Invoice: ${{rate}}. Completion photos are in Breezeway. Please remit payment at your convenience. Thank you! â HostTurn"],
       // SPANISH
-      ["owner_confirm", "es", "Hola {{owner}}, somos HostTurn. Tenemos {{property}} programado para limpieza mañana. ¿Puede confirmar que la hora de salida es {{checkout_time}}? ¡Gracias!"],
-      ["cleaner_sched", "es", "Hola {{cleaner}}, aquí está tu horario para mañana:\n{{job_list}}\n¡Por favor confirma que estás listo/a!"],
-      ["morning", "es", "¡Buenos días {{cleaner}}! Confirmando que vas en camino. Primer trabajo: {{property}} — salida {{checkout_time}}. ¡Avísame cuando salgas!"],
-      ["arrival_started", "es", "¡Perfecto {{cleaner}}, vemos que empezaste en {{property}}! Recordatorios:\n{{property_notes}}\nAvísanos si necesitas algo."],
-      ["arrival_late", "es", "Hola {{cleaner}}, te esperábamos en {{property}} a las {{expected_arrival}} pero no vemos que hayas comenzado en Breezeway. ¿Cuál es tu hora estimada de llegada?"],
-      ["arrival_next_job", "es", "Hola {{cleaner}}, ¡buen trabajo terminando {{prev_property}}! Tu siguiente trabajo es {{property}}. Ve hacia allá y presiona INICIAR en Breezeway al llegar."],
-      ["arrival_next_late", "es", "Hola {{cleaner}}, ya pasó un rato desde que terminaste {{prev_property}}. ¿Vas camino a {{property}}? Por favor avísanos tu hora estimada."],
-      ["progress", "es", "Hola {{cleaner}}, ¿cómo va en {{property}}? Necesitas terminar antes de las {{finish_by}}. ¡Avísanos si hay algún problema!"],
-      ["end_verify", "es", "{{cleaner}} — antes de marcar {{property}} como completado, sube todas las fotos a Breezeway. Revisa: camas, baños, cocina, pisos."],
-      ["finishing", "es", "[Admin] Revisar fotos de {{property}} ({{cleaner}}). Anotar problemas para la próxima limpieza."],
-      ["close_out", "es", "Hola {{owner}}, {{property}} ha sido limpiado y está listo para huéspedes. Factura: ${{rate}}. Las fotos están en Breezeway. Por favor envíe el pago. ¡Gracias! — HostTurn"],
+      ["owner_confirm", "es", "Hola {{owner}}, somos HostTurn. Tenemos {{property}} programado para limpieza maÃ±ana. Â¿Puede confirmar que la hora de salida es {{checkout_time}}? Â¡Gracias!"],
+      ["cleaner_sched", "es", "Hola {{cleaner}}, aquÃ­ estÃ¡ tu horario para maÃ±ana:\n{{job_list}}\nÂ¡Por favor confirma que estÃ¡s listo/a!"],
+      ["morning", "es", "Â¡Buenos dÃ­as {{cleaner}}! Confirmando que vas en camino. Primer trabajo: {{property}} â salida {{checkout_time}}. Â¡AvÃ­same cuando salgas!"],
+      ["arrival_started", "es", "Â¡Perfecto {{cleaner}}, vemos que empezaste en {{property}}! Recordatorios:\n{{property_notes}}\nAvÃ­sanos si necesitas algo."],
+      ["arrival_late", "es", "Hola {{cleaner}}, te esperÃ¡bamos en {{property}} a las {{expected_arrival}} pero no vemos que hayas comenzado en Breezeway. Â¿CuÃ¡l es tu hora estimada de llegada?"],
+      ["arrival_next_job", "es", "Hola {{cleaner}}, Â¡buen trabajo terminando {{prev_property}}! Tu siguiente trabajo es {{property}}. Ve hacia allÃ¡ y presiona INICIAR en Breezeway al llegar."],
+      ["arrival_next_late", "es", "Hola {{cleaner}}, ya pasÃ³ un rato desde que terminaste {{prev_property}}. Â¿Vas camino a {{property}}? Por favor avÃ­sanos tu hora estimada."],
+      ["progress", "es", "Hola {{cleaner}}, Â¿cÃ³mo va en {{property}}? Necesitas terminar antes de las {{finish_by}}. Â¡AvÃ­sanos si hay algÃºn problema!"],
+      ["end_verify", "es", "{{cleaner}} â antes de marcar {{property}} como completado, sube todas las fotos a Breezeway. Revisa: camas, baÃ±os, cocina, pisos."],
+      ["finishing", "es", "[Admin] Revisar fotos de {{property}} ({{cleaner}}). Anotar problemas para la prÃ³xima limpieza."],
+      ["close_out", "es", "Hola {{owner}}, {{property}} ha sido limpiado y estÃ¡ listo para huÃ©spedes. Factura: ${{rate}}. Las fotos estÃ¡n en Breezeway. Por favor envÃ­e el pago. Â¡Gracias! â HostTurn"],
     ];
     const insertMany = db.transaction(() => { for (const t of tpls) ins.run(...t); });
     insertMany();
@@ -224,6 +224,8 @@ function initTables() {
   try { db.exec("ALTER TABLE properties ADD COLUMN stripe_link TEXT DEFAULT ''"); } catch(e) {}
   try { db.exec("ALTER TABLE properties ADD COLUMN tags TEXT DEFAULT ''"); } catch(e) {}
   try { db.exec("ALTER TABLE properties ADD COLUMN archived INTEGER DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE properties ADD COLUMN bed_count INTEGER DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE properties ADD COLUMN sqft INTEGER DEFAULT 0"); } catch(e) {}
   // Prospects table for Rate Calculator
   db.exec(`
     CREATE TABLE IF NOT EXISTS prospects (
