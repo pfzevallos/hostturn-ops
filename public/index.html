@@ -72,7 +72,7 @@
   <div class="header">
     <h1>Host<span>Turn</span> Ops</h1>
     <div class="status"><div class="dot"></div> System Live</div>
-    <a href="/scr-tracker.html" style="color:#a855f7;text-decoration:none;font-size:14px;font-weight:500;padding:6px 14px;background:rgba(168,85,247,0.12);border-radius:8px;display:inline-flex;align-items:center;gap:6px;">ð° SCR Payment Tracker</a>
+    <a href="/scr-tracker.html" style="color:#a855f7;text-decoration:none;font-size:14px;font-weight:500;padding:6px 14px;background:rgba(168,85,247,0.12);border-radius:8px;display:inline-flex;align-items:center;gap:6px;">&#x1F4B0; SCR Payment Tracker</a>
   </div>
   <div class="container">
     <div class="stats">
@@ -82,22 +82,22 @@
       <div class="stat"><div class="label">Completed</div><div class="value green" id="s-done">-</div></div>
     </div>
     <div class="tabs">
-      <div class="tab" id="tab-yesterday" onclick="switchTab('yesterday')">Yesterday <span class="count" id="count-yesterday">â</span></div>
-      <div class="tab active" id="tab-today" onclick="switchTab('today')">Today <span class="count" id="count-today">â</span></div>
-      <div class="tab" id="tab-tomorrow" onclick="switchTab('tomorrow')">Tomorrow <span class="count" id="count-tomorrow">â</span></div>
-      <div class="tab" id="tab-dayafter" onclick="switchTab('dayafter')">Day After <span class="count" id="count-dayafter">â</span></div>
-      <div class="tab" id="tab-payments" onclick="switchTab('payments')">Payments ð°</div>
-      <div class="tab" id="tab-calculator" onclick="switchTab('calculator')">Rate Calculator ð§®</div>
-      <div class="tab" id="tab-homes" onclick="switchTab('homes')">Homes ð </div>
+      <div class="tab" id="tab-yesterday" onclick="switchTab('yesterday')">Yesterday <span class="count" id="count-yesterday">&#8212;</span></div>
+      <div class="tab active" id="tab-today" onclick="switchTab('today')">Today <span class="count" id="count-today">&#8212;</span></div>
+      <div class="tab" id="tab-tomorrow" onclick="switchTab('tomorrow')">Tomorrow <span class="count" id="count-tomorrow">&#8212;</span></div>
+      <div class="tab" id="tab-dayafter" onclick="switchTab('dayafter')">Day After <span class="count" id="count-dayafter">&#8212;</span></div>
+      <div class="tab" id="tab-payments" onclick="switchTab('payments')">Payments &#x1F4B0;</div>
+      <div class="tab" id="tab-calculator" onclick="switchTab('calculator')">Rate Calculator &#x1F9EE;</div>
+      <div class="tab" id="tab-homes" onclick="switchTab('homes')">Homes &#x1F3E0;</div>
     </div>
     <div class="section-header">
       <h2 id="schedule-title">Today's Schedule</h2>
       <div class="actions">
         <span class="date" id="display-date"></span>
         <button class="btn" id="sync-btn" onclick="syncTasks()">Sync Breezeway</button>
-        <button class="btn blue" id="send-btn" style="display:none" onclick="sendSchedule()">ð© Send Schedule to Cleaners</button>
-        <button class="btn" id="owner-btn" style="display:none;background:var(--warn);color:#000" onclick="notifyOwners()">ð§ Notify Owners</button>
-        <button class="btn" id="closeout-btn" style="display:none;background:#a855f7;color:#fff" onclick="sendCloseouts()">ð° Send Close-Out Emails</button>
+        <button class="btn blue" id="send-btn" style="display:none" onclick="sendSchedule()">&#x1F4E9; Send Schedule to Cleaners</button>
+        <button class="btn" id="owner-btn" style="display:none;background:var(--warn);color:#000" onclick="notifyOwners()">&#x1F4E7; Notify Owners</button>
+        <button class="btn" id="closeout-btn" style="display:none;background:#a855f7;color:#fff" onclick="sendCloseouts()">&#x1F4B0; Send Close-Out Emails</button>
       </div>
     </div>
     <div id="jobs" class="jobs-grid">
@@ -149,7 +149,7 @@
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px;">
         <!-- Calculator Form -->
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;">
-          <h3 style="margin:0 0 16px 0;font-size:16px;">ð§® Rate Calculator</h3>
+          <h3 style="margin:0 0 16px 0;font-size:16px;">&#x1F9EE; Rate Calculator</h3>
           <div style="margin-bottom:12px;">
             <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Property Name / Address</label>
             <input type="text" id="calc-name" placeholder="Enter property name" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
@@ -160,14 +160,6 @@
               <input type="number" id="calc-sf" value="0" min="0" oninput="calcRate()" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
             </div>
             <div>
-        <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Bed Count</label>
-        <input type="number" id="home-bedcount" value="0" min="0" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
-      </div>
-      <div>
-        <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Sq Ft</label>
-        <input type="number" id="home-sqft" value="0" min="0" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
-      </div>
-      <div>
               <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Full Bathrooms</label>
               <input type="number" id="calc-fullbaths" value="0" min="0" oninput="calcRate()" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
             </div>
@@ -197,19 +189,19 @@
             </label>
           </div>
           <div style="margin-top:12px;">
-            <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Proposed Rate (optional â enter if different from calculated)</label>
+            <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Proposed Rate (optional &#8212; enter if different from calculated)</label>
             <input type="number" id="calc-proposed" value="0" min="0" style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;">
           </div>
           <div style="margin-top:12px;">
             <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Notes</label>
             <textarea id="calc-notes" rows="2" placeholder="Optional notes..." style="width:100%;box-sizing:border-box;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:13px;resize:vertical;font-family:inherit;"></textarea>
           </div>
-          <button class="btn" onclick="saveProspect()" style="margin-top:16px;width:100%;padding:10px;font-size:14px;">ð¾ Save Prospect</button>
+          <button class="btn" onclick="saveProspect()" style="margin-top:16px;width:100%;padding:10px;font-size:14px;">&#x1F4BE; Save Prospect</button>
           <input type="hidden" id="calc-edit-id" value="">
         </div>
         <!-- Calculation Breakdown -->
         <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;">
-          <h3 style="margin:0 0 16px 0;font-size:16px;">ð Rate Breakdown</h3>
+          <h3 style="margin:0 0 16px 0;font-size:16px;">&#x1F4CA; Rate Breakdown</h3>
           <table style="width:100%;border-collapse:collapse;font-size:14px;" id="calc-breakdown">
             <tr style="border-bottom:1px solid var(--border);">
               <td style="padding:10px;color:var(--text2);">Base (first 1500 SF)</td>
@@ -264,7 +256,7 @@
       </div>
       <!-- Prospect Homes Table -->
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;">
-        <h3 style="margin:0 0 16px 0;font-size:16px;">ð  Prospect Homes</h3>
+        <h3 style="margin:0 0 16px 0;font-size:16px;">&#x1F3E0; Prospect Homes</h3>
         <div style="overflow-x:auto;">
           <table style="width:100%;border-collapse:collapse;font-size:13px;">
             <thead>
@@ -287,7 +279,7 @@
     <div id="homes-section" style="display:none">
       <!-- Add/Edit Form -->
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:24px;">
-        <h3 style="margin:0 0 16px 0;font-size:16px;" id="homes-form-title">â Add New Home</h3>
+        <h3 style="margin:0 0 16px 0;font-size:16px;" id="homes-form-title">&#10133; Add New Home</h3>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
           <div>
             <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">Region *</label>
@@ -351,7 +343,7 @@
           </div>
         </div>
         <div style="display:flex;gap:8px;margin-top:16px;">
-          <button class="btn" onclick="saveHome()" style="padding:10px 24px;font-size:14px;" id="home-save-btn">ð¾ Add Home</button>
+          <button class="btn" onclick="saveHome()" style="padding:10px 24px;font-size:14px;" id="home-save-btn">&#x1F4BE; Add Home</button>
           <button class="btn" onclick="cancelEditHome()" style="display:none;padding:10px 24px;font-size:14px;background:var(--surface2);color:var(--text);" id="home-cancel-btn">Cancel</button>
         </div>
         <input type="hidden" id="home-edit-id" value="">
@@ -366,42 +358,19 @@
           <table style="width:100%;border-collapse:collapse;font-size:13px;" id="homes-table">
             <thead>
               <tr style="background:var(--surface2);text-align:left;">
-                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('region')">Region â</th>
-                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('name')">Property â</th>
-                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('city')">City â</th>
-                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('owner_manager')">Owner/Manager â</th>
-                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('beds')">Beds â</th><th style="padding:12px 16px;text-align:left;font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;cursor:pointer;user-select:none;white-space:nowrap;" onclick="sortHomes('bed_count')">Bed Ct &#8645;</th><th style="padding:12px 16px;text-align:left;font-size:12px;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;cursor:pointer;user-select:none;white-space:nowrap;" onclick="sortHomes('sqft')">SF &#8645;</th>
-                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('baths')">Baths â</th>
-                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('rate')">Std Rate â</th>
-                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('deep_clean_rate')">Deep Clean â</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('region')">Region &#8645;</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('name')">Property &#8645;</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('city')">City &#8645;</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('owner_manager')">Owner/Manager &#8645;</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('beds')">Beds &#8645;</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('baths')">Baths &#8645;</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('rate')">Std Rate &#8645;</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('deep_clean_rate')">Deep Clean &#8645;</th>
                 <th style="padding:10px;border-bottom:1px solid var(--border);">Actions</th>
               </tr>
             </thead>
             <tbody id="homes-body"></tbody>
           </table>
-        </div>
-      </div>
-      <!-- Archived Homes -->
-      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;margin-top:24px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;" onclick="toggleArchivedHomes()">
-          <h3 style="margin:0;font-size:16px;color:var(--text2);">ð¦ Archived Homes (<span id="archived-count">0</span>)</h3>
-          <span id="archived-toggle" style="font-size:18px;color:var(--text2);">â¶</span>
-        </div>
-        <div id="archived-homes-container" style="display:none;margin-top:16px;">
-          <div style="overflow-x:auto;">
-            <table style="width:100%;border-collapse:collapse;font-size:13px;">
-              <thead>
-                <tr style="background:var(--surface2);text-align:left;">
-                  <th style="padding:10px;border-bottom:1px solid var(--border);">Region</th>
-                  <th style="padding:10px;border-bottom:1px solid var(--border);">Property</th>
-                  <th style="padding:10px;border-bottom:1px solid var(--border);">City</th>
-                  <th style="padding:10px;border-bottom:1px solid var(--border);">Std Rate</th>
-                  <th style="padding:10px;border-bottom:1px solid var(--border);">Actions</th>
-                </tr>
-              </thead>
-              <tbody id="archived-body"></tbody>
-            </table>
-          </div>
         </div>
       </div>
     </div>
@@ -482,11 +451,11 @@
       var cbtn = document.getElementById('closeout-btn');
       if (pendingCloseouts.length > 0) {
         cbtn.style.display = 'inline-flex';
-        cbtn.textContent = 'ð° Send Close-Out Emails (' + pendingCloseouts.length + ')';
+        cbtn.textContent = '\u{1F4B0} Send Close-Out Emails (' + pendingCloseouts.length + ')';
         cbtn.style.background = '#a855f7'; cbtn.style.color = '#fff';
       } else if (activeJobs.some(function(j){return j.closeout_email_sent_at})) {
         cbtn.style.display = 'inline-flex';
-        cbtn.textContent = 'â Close-Outs Sent';
+        cbtn.textContent = '\u{2705} Close-Outs Sent';
         cbtn.style.background = 'var(--accent)'; cbtn.style.color = '#000';
       } else {
         cbtn.style.display = 'none';
@@ -499,13 +468,13 @@
         var allConfirmed = assignedJobs.length && assignedJobs.every(function(j){return j.confirmed_at});
         var btn = document.getElementById('send-btn');
         if (allConfirmed) {
-          btn.textContent = 'â All Confirmed';
+          btn.textContent = '\u{2705} All Confirmed';
           btn.style.background = 'var(--accent)'; btn.style.color = '#000';
         } else if (allSent) {
-          btn.textContent = 'ð© Resend Schedule';
+          btn.textContent = '\u{1F4E9} Resend Schedule';
           btn.style.background = 'var(--warn)'; btn.style.color = '#000';
         } else {
-          btn.textContent = 'ð© Send Schedule to Cleaners';
+          btn.textContent = '\u{1F4E9} Send Schedule to Cleaners';
           btn.style.background = 'var(--blue)'; btn.style.color = '#fff';
         }
         // Update owner button
@@ -515,16 +484,16 @@
         var allOwnerConfirmed = futureJobs.length && futureJobs.every(function(j){return j.owner_confirmed_at});
         var pendingOwners = futureJobs.length - notifiedCount;
         if (allOwnerConfirmed) {
-          obtn.textContent = 'â Owners Confirmed';
+          obtn.textContent = '\u{2705} Owners Confirmed';
           obtn.style.background = 'var(--accent)'; obtn.style.color = '#000';
         } else if (allOwnerNotified) {
-          obtn.textContent = 'â Owners Notified (' + notifiedCount + '/' + futureJobs.length + ')';
+          obtn.textContent = '\u{2705} Owners Notified (' + notifiedCount + '/' + futureJobs.length + ')';
           obtn.style.background = 'var(--accent)'; obtn.style.color = '#000';
         } else if (notifiedCount > 0) {
-          obtn.textContent = 'ð§ Notify Remaining (' + pendingOwners + ')';
+          obtn.textContent = '\u{1F4E7} Notify Remaining (' + pendingOwners + ')';
           obtn.style.background = 'var(--warn)'; obtn.style.color = '#000';
         } else {
-          obtn.textContent = 'ð§ Notify Owners (' + futureJobs.length + ')';
+          obtn.textContent = '\u{1F4E7} Notify Owners (' + futureJobs.length + ')';
           obtn.style.background = 'var(--warn)'; obtn.style.color = '#000';
         }
       }
@@ -536,7 +505,7 @@
       var el = document.getElementById('jobs');
       if (!jobs.length) {
         var label = currentTab === 'yesterday' ? 'yesterday' : currentTab === 'today' ? 'today' : currentTab === 'tomorrow' ? 'tomorrow' : 'the day after tomorrow';
-        el.innerHTML = '<div class="empty"><div class="icon">ð</div><p>No jobs scheduled for ' + label + '.<br>Click "Sync Breezeway" to pull tasks.</p></div>';
+        el.innerHTML = '<div class="empty"><div class="icon">&#x1F4CB;</div><p>No jobs scheduled for ' + label + '.<br>Click "Sync Breezeway" to pull tasks.</p></div>';
         return;
       }
       el.innerHTML = jobs.map(function(j) {
@@ -546,18 +515,18 @@
         var sc = (sl==='completed'||sl==='finished'||sl==='closed') ? 'completed' : sl==='started' ? 'started' : sl==='created' ? 'created' : st!=='Scheduled' ? 'pending' : 'scheduled';
         var smsStatus = '';
         if (j.confirmed_at) {
-          smsStatus = '<span style="font-size:11px;color:var(--accent);margin-left:4px">â Confirmed</span>';
+          smsStatus = '<span style="font-size:11px;color:var(--accent);margin-left:4px">&#9989; Confirmed</span>';
         } else if (j.schedule_sent_at) {
-          smsStatus = '<span style="font-size:11px;color:var(--warn);margin-left:4px">ð© Sent</span>';
+          smsStatus = '<span style="font-size:11px;color:var(--warn);margin-left:4px">&#x1F4E9; Sent</span>';
         }
         var ownerStatus = '';
         if (j.owner_confirmed_at) {
-          ownerStatus = '<span style="font-size:11px;color:var(--accent);margin-left:4px">â Owner OK</span>';
+          ownerStatus = '<span style="font-size:11px;color:var(--accent);margin-left:4px">&#9989; Owner OK</span>';
         } else if (j.owner_notified_at) {
-          ownerStatus = '<span style="font-size:11px;color:var(--warn);margin-left:4px">ð§ Owner Notified</span>';
+          ownerStatus = '<span style="font-size:11px;color:var(--warn);margin-left:4px">&#x1F4E7; Owner Notified</span>';
         }
         if (j.closeout_email_sent_at) {
-          ownerStatus += '<span style="font-size:11px;color:var(--accent);margin-left:4px">ð° Invoice Sent</span>';
+          ownerStatus += '<span style="font-size:11px;color:var(--accent);margin-left:4px">&#x1F4B0; Invoice Sent</span>';
         }
         // Progress checkboxes and report link (Yesterday and Today tabs)
         var progressHtml = '';
@@ -565,8 +534,8 @@
           var arrChecked = j.arrival_confirmed_at ? 'checked' : '';
           var rptChecked = j.report_verified_at ? 'checked' : '';
           var reportLink = j.bw_report_url 
-            ? '<a href="' + j.bw_report_url + '" target="_blank" title="View Cleaning Report">ð Report</a>' 
-            : '<span style="color:var(--text2)">â</span>';
+            ? '<a href="' + j.bw_report_url + '" target="_blank" title="View Cleaning Report">&#x1F4CB; Report</a>' 
+            : '<span style="color:var(--text2)">&#8212;</span>';
           progressHtml = '<div class="progress-checks">' +
             '<div class="check-item" onclick="toggleArrival(\'' + j.id + '\')">' +
               '<input type="checkbox" ' + arrChecked + ' onclick="event.stopPropagation();toggleArrival(\'' + j.id + '\')">' +
@@ -672,7 +641,7 @@
         var msg = 'Send ' + label + '\'s schedule via SMS to ' + cleanerList.length + ' cleaner(s)?\n\n';
         cleanerList.forEach(function(c) {
           var count = activeJobs.filter(function(j){return j.cleaner_name===c}).length;
-          msg += 'â¢ ' + c + ' (' + count + ' job' + (count>1?'s':'') + ')\n';
+          msg += '&#8226; ' + c + ' (' + count + ' job' + (count>1?'s':'') + ')\n';
         });
         if (!confirm(msg)) return;
       }
@@ -702,7 +671,7 @@
         if (!confirm('All owners have already been notified. Send again anyway?')) return;
       } else {
         var msg = 'Send owner notifications for ' + pendingJobs.length + ' job(s) not yet notified?\n\n';
-        pendingJobs.forEach(function(j){ msg += 'â¢ ' + j.property_name + '\n'; });
+        pendingJobs.forEach(function(j){ msg += '&#8226; ' + j.property_name + '\n'; });
         if (!confirm(msg)) return;
       }
       var btn = document.getElementById('owner-btn');
@@ -730,7 +699,7 @@
       });
       if (!finishedJobs.length) { alert('No finished jobs pending close-out emails.'); return; }
       var msg = 'Send close-out emails (invoice + photos) for ' + finishedJobs.length + ' finished job(s)?\n\n';
-      finishedJobs.forEach(function(j) { msg += 'â¢ ' + j.property_name + '\n'; });
+      finishedJobs.forEach(function(j) { msg += '&#8226; ' + j.property_name + '\n'; });
       if (!confirm(msg)) return;
       var btn = document.getElementById('closeout-btn');
       btn.disabled = true; btn.textContent = 'Sending...';
@@ -739,11 +708,11 @@
         var data = await r.json();
         if (data.error) { btn.textContent = 'Error: ' + data.error; }
         else { btn.textContent = 'Sent ' + data.sent + ' close-out emails!'; }
-        setTimeout(function(){ btn.textContent = 'ð° Send Close-Out Emails'; btn.disabled = false; }, 5000);
+        setTimeout(function(){ btn.textContent = '\u{1F4B0} Send Close-Out Emails'; btn.disabled = false; }, 5000);
         loadAllJobs();
       } catch(e) {
         btn.textContent = 'Error!';
-        setTimeout(function(){ btn.textContent = 'ð° Send Close-Out Emails'; btn.disabled = false; }, 3000);
+        setTimeout(function(){ btn.textContent = '\u{1F4B0} Send Close-Out Emails'; btn.disabled = false; }, 3000);
       }
     }
 
@@ -818,7 +787,7 @@
         // Owner rate & invoice
         var ownerRate = j.rate > 0 ? '$' + j.rate.toFixed(0) : '-';
         var invoiceStatus = j.closeout_email_sent_at 
-          ? '<span style="color:var(--accent);font-size:11px">â Sent</span>' 
+          ? '<span style="color:var(--accent);font-size:11px">&#9989; Sent</span>' 
           : j.rate > 0 ? '<span style="color:var(--text2);font-size:11px">Not sent</span>' : '-';
         
         // Owner payment
@@ -826,7 +795,7 @@
         if (j.rate === 0) {
           ownerPayment = '<span style="color:var(--text2)">N/A</span>';
         } else if (j.owner_paid_at) {
-          ownerPayment = '<button onclick="toggleOwnerPaid(\'' + j.id + '\', false)" style="background:var(--accent);color:#000;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">â Paid</button>';
+          ownerPayment = '<button onclick="toggleOwnerPaid(\'' + j.id + '\', false)" style="background:var(--accent);color:#000;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">&#9989; Paid</button>';
         } else {
           ownerPayment = '<button onclick="toggleOwnerPaid(\'' + j.id + '\', true)" style="background:rgba(245,158,11,0.15);color:var(--warn);border:1px solid var(--warn);padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">Open</button>';
         }
@@ -842,15 +811,15 @@
         if (!isHourly && (!j.cleaner_rate || j.cleaner_rate === 0)) {
           cleanerPayment = '<span style="color:var(--text2)">N/A</span>';
         } else if (j.cleaner_paid_at) {
-          cleanerPayment = '<button onclick="toggleCleanerPaid(\'' + j.id + '\', false)" style="background:var(--accent);color:#000;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">â Paid</button>';
+          cleanerPayment = '<button onclick="toggleCleanerPaid(\'' + j.id + '\', false)" style="background:var(--accent);color:#000;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">&#9989; Paid</button>';
         } else {
           cleanerPayment = '<button onclick="toggleCleanerPaid(\'' + j.id + '\', true)" style="background:rgba(239,68,68,0.15);color:var(--danger);border:1px solid var(--danger);padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">Unpaid</button>';
         }
         
         // Report link
         var reportLink = j.bw_report_url 
-          ? '<a href="' + j.bw_report_url + '" target="_blank" style="color:var(--blue);text-decoration:none;font-size:11px;">ð View</a>' 
-          : '<span style="color:var(--text2);font-size:11px;">â</span>';
+          ? '<a href="' + j.bw_report_url + '" target="_blank" style="color:var(--blue);text-decoration:none;font-size:11px;">&#x1F4CB; View</a>' 
+          : '<span style="color:var(--text2);font-size:11px;">&#8212;</span>';
         
         // Tags for payments view
         var payTagHtml = '';
@@ -892,9 +861,9 @@
     loadAllJobs();
     setInterval(loadAllJobs, 60000);
 
-    // âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    // &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;
     // RATE CALCULATOR & PROSPECTS
-    // âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    // &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;
     
     function calcRate() {
       var sf = parseFloat(document.getElementById('calc-sf').value) || 0;
@@ -945,15 +914,15 @@
       // Update breakdown display
       document.getElementById('cb-base').textContent = '$' + base.toFixed(2);
       document.getElementById('cb-sf').textContent = '$' + sfCost.toFixed(2);
-      document.getElementById('cb-sf-note').textContent = extraSF > 0 ? '(' + extraSF.toFixed(0) + ' SF Ã $0.04)' : '';
+      document.getElementById('cb-sf-note').textContent = extraSF > 0 ? '(' + extraSF.toFixed(0) + ' SF x $0.04)' : '';
       document.getElementById('cb-fb').textContent = '$' + fbCost.toFixed(2);
-      document.getElementById('cb-fb-note').textContent = fullBaths > 0 ? '(' + fullBaths + ' Ã $40)' : '';
+      document.getElementById('cb-fb-note').textContent = fullBaths > 0 ? '(' + fullBaths + ' x $40)' : '';
       document.getElementById('cb-hb').textContent = '$' + hbCost.toFixed(2);
-      document.getElementById('cb-hb-note').textContent = halfBaths > 0 ? '(' + halfBaths + ' Ã $30)' : '';
+      document.getElementById('cb-hb-note').textContent = halfBaths > 0 ? '(' + halfBaths + ' x $30)' : '';
       document.getElementById('cb-br').textContent = '$' + brCost.toFixed(2);
-      document.getElementById('cb-br-note').textContent = bedrooms > 0 ? '(' + bedrooms + ' Ã $30)' : '';
+      document.getElementById('cb-br-note').textContent = bedrooms > 0 ? '(' + bedrooms + ' x $30)' : '';
       document.getElementById('cb-beds').textContent = '$' + bedsCost.toFixed(2);
-      document.getElementById('cb-beds-note').textContent = extraBeds > 0 ? '(' + extraBeds + ' extra Ã $12)' : '';
+      document.getElementById('cb-beds-note').textContent = extraBeds > 0 ? '(' + extraBeds + ' extra x $12)' : '';
       document.getElementById('cb-linen').textContent = linenDiscount !== 0 ? '-$' + Math.abs(linenDiscount).toFixed(2) : '$0.00';
       document.getElementById('cb-pets').textContent = '$' + petsIncrease.toFixed(2);
       document.getElementById('cb-adjust').textContent = adjust >= 0 ? '$' + adjust.toFixed(2) : '-$' + Math.abs(adjust).toFixed(2);
@@ -1029,9 +998,9 @@
         
         var statusBtn;
         if (p.status === 'won') {
-          statusBtn = '<button onclick="setProspectStatus(\'' + p.id + '\',\'prospect\')" style="background:var(--accent);color:#000;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">â Won</button>';
+          statusBtn = '<button onclick="setProspectStatus(\'' + p.id + '\',\'prospect\')" style="background:var(--accent);color:#000;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">&#9989; Won</button>';
         } else if (p.status === 'lost') {
-          statusBtn = '<button onclick="setProspectStatus(\'' + p.id + '\',\'prospect\')" style="background:rgba(239,68,68,0.15);color:var(--danger);border:1px solid var(--danger);padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">â Lost</button>';
+          statusBtn = '<button onclick="setProspectStatus(\'' + p.id + '\',\'prospect\')" style="background:rgba(239,68,68,0.15);color:var(--danger);border:1px solid var(--danger);padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer;">&#10060; Lost</button>';
         } else {
           statusBtn = '<button onclick="setProspectStatus(\'' + p.id + '\',\'won\')" style="background:rgba(34,197,94,0.15);color:var(--accent);border:1px solid var(--accent);padding:3px 8px;border-radius:6px;font-size:10px;font-weight:600;cursor:pointer;margin-right:4px;">Won</button>' +
             '<button onclick="setProspectStatus(\'' + p.id + '\',\'lost\')" style="background:rgba(239,68,68,0.15);color:var(--danger);border:1px solid var(--danger);padding:3px 8px;border-radius:6px;font-size:10px;font-weight:600;cursor:pointer;">Lost</button>';
@@ -1044,7 +1013,7 @@
           '<td style="padding:10px;font-family:JetBrains Mono,monospace;color:var(--blue);">$' + p.deep_clean_rate.toFixed(0) + '</td>' +
           '<td style="padding:10px;font-family:JetBrains Mono,monospace;font-weight:600;">' + proposed + '</td>' +
           '<td style="padding:10px;" onclick="event.stopPropagation()">' + statusBtn + '</td>' +
-          '<td style="padding:10px;" onclick="event.stopPropagation()"><button onclick="deleteProspect(\'' + p.id + '\')" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:14px;" title="Delete">ðï¸</button></td>' +
+          '<td style="padding:10px;" onclick="event.stopPropagation()"><button onclick="deleteProspect(\'' + p.id + '\')" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:14px;" title="Delete">&#x1F5D1;&#xFE0F;</button></td>' +
         '</tr>';
       }).join('');
     }
@@ -1082,29 +1051,25 @@
       loadProspects();
     }
 
-    // âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    // &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;
     // HOMES MANAGEMENT
-    // âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    // &#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;&#9552;
     
     var allHomes = [];
     var homesSortCol = 'region';
     var homesSortDir = 1;
-
+    
     async function loadHomes() {
       try {
         var r = await fetch('/api/properties/all');
         allHomes = await r.json();
-        var active = allHomes.filter(function(h) { return !h.archived; });
-        var archived = allHomes.filter(function(h) { return h.archived; });
-        document.getElementById('homes-count').textContent = active.length;
-        document.getElementById('archived-count').textContent = archived.length;
+        document.getElementById('homes-count').textContent = allHomes.length;
         renderHomes();
-        renderArchivedHomes();
       } catch(e) {
-        document.getElementById('homes-body').innerHTML = '<tr><td colspan="11" style="padding:20px;text-align:center;color:var(--text2)">Error: ' + e.message + '</td></tr>';
+        document.getElementById('homes-body').innerHTML = '<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--text2)">Error: ' + e.message + '</td></tr>';
       }
     }
-
+    
     function sortHomes(col) {
       if (homesSortCol === col) {
         homesSortDir = -homesSortDir;
@@ -1114,24 +1079,14 @@
       }
       renderHomes();
     }
-
+    
     function filterHomes() {
       renderHomes();
     }
-
-    function getRegionBadge(region) {
-      if (region === 'Southern VT') return '<span style="background:rgba(34,197,94,0.15);color:var(--accent);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">S. VT</span>';
-      if (region === 'Champlain Valley, VT') return '<span style="background:rgba(168,85,247,0.15);color:#a855f7;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">CV VT</span>';
-      if (region === 'Hudson Valley, NY') return '<span style="background:rgba(59,130,246,0.15);color:var(--blue);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">HV NY</span>';
-      if (region === 'Jersey Shore, NJ') return '<span style="background:rgba(236,72,153,0.15);color:#ec4899;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">JS NJ</span>';
-      if (region === 'Poconos, PA') return '<span style="background:rgba(245,158,11,0.15);color:var(--warn);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">PA</span>';
-      return '<span style="color:var(--text2);font-size:11px;">' + (region || '-') + '</span>';
-    }
-
+    
     function renderHomes() {
       var search = (document.getElementById('homes-search').value || '').toLowerCase();
       var homes = allHomes.filter(function(h) {
-        if (h.archived) return false;
         if (!search) return true;
         return (h.name||'').toLowerCase().includes(search) ||
           (h.region||'').toLowerCase().includes(search) ||
@@ -1139,91 +1094,46 @@
           (h.owner_manager||'').toLowerCase().includes(search) ||
           (h.address||'').toLowerCase().includes(search);
       });
-
+      
       homes.sort(function(a, b) {
         var va = a[homesSortCol] || '';
         var vb = b[homesSortCol] || '';
         if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * homesSortDir;
         return String(va).localeCompare(String(vb)) * homesSortDir;
       });
-
+      
       if (!homes.length) {
-        document.getElementById('homes-body').innerHTML = '<tr><td colspan="11" style="padding:20px;text-align:center;color:var(--text2)">No homes found.</td></tr>';
+        document.getElementById('homes-body').innerHTML = '<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--text2)">No homes found.</td></tr>';
         return;
       }
-
+      
       document.getElementById('homes-body').innerHTML = homes.map(function(h) {
         var rate = h.rate > 0 ? '$' + h.rate.toFixed(0) : '-';
         var deep = h.deep_clean_rate > 0 ? '$' + h.deep_clean_rate.toFixed(0) : '-';
-        var regionBadge = getRegionBadge(h.region);
-
+        var regionBadge = '';
+        if (h.region === 'Southern VT') regionBadge = '<span style="background:rgba(34,197,94,0.15);color:var(--accent);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">S. VT</span>';
+        else if (h.region === 'Champlain Valley, VT') regionBadge = '<span style="background:rgba(168,85,247,0.15);color:#a855f7;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">CV VT</span>';
+        else if (h.region === 'Hudson Valley, NY') regionBadge = '<span style="background:rgba(59,130,246,0.15);color:var(--blue);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">HV NY</span>';
+        else if (h.region === 'Jersey Shore, NJ') regionBadge = '<span style="background:rgba(236,72,153,0.15);color:#ec4899;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">JS NJ</span>';
+        else if (h.region === 'Poconos, PA') regionBadge = '<span style="background:rgba(245,158,11,0.15);color:var(--warn);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">PA</span>';
+        else regionBadge = '<span style="color:var(--text2);font-size:11px;">' + (h.region || '-') + '</span>';
+        
         var propName = h.name || '-';
         var city = h.city || '-';
         var owner = h.owner_manager || '-';
-
+        
         return '<tr style="border-bottom:1px solid var(--border);">' +
           '<td style="padding:10px;">' + regionBadge + '</td>' +
           '<td style="padding:10px;font-weight:500;">' + propName + '</td>' +
           '<td style="padding:10px;font-size:12px;">' + city + '</td>' +
           '<td style="padding:10px;font-size:12px;">' + owner + '</td>' +
           '<td style="padding:10px;text-align:center;">' + (h.beds || '-') + '</td>' +
-          '<td style="padding:10px;text-align:center;">' + (h.bed_count || '-') + '</td>' +
-          '<td style="padding:10px;text-align:center;">' + (h.sqft || '-') + '</td>' +
           '<td style="padding:10px;text-align:center;">' + (h.baths || '-') + '</td>' +
           '<td style="padding:10px;font-family:JetBrains Mono,monospace;font-weight:600;color:var(--accent);">' + rate + '</td>' +
           '<td style="padding:10px;font-family:JetBrains Mono,monospace;color:var(--blue);">' + deep + '</td>' +
-          '<td style="padding:10px;">' +
-            '<button onclick="editHome(\'' + h.id + '\')" style="background:none;border:none;cursor:pointer;font-size:14px;" title="Edit">âï¸</button>' +
-            '<button onclick="archiveHome(\'' + h.id + '\')" style="background:none;border:none;cursor:pointer;font-size:14px;margin-left:4px;" title="Archive">ð¦</button>' +
-          '</td>' +
+          '<td style="padding:10px;"><button onclick="editHome(\'' + h.id + '\')" style="background:none;border:none;cursor:pointer;font-size:14px;" title="Edit">&#9999;&#65039;</button></td>' +
         '</tr>';
       }).join('');
-    }
-
-    function renderArchivedHomes() {
-      var archived = allHomes.filter(function(h) { return h.archived; });
-      if (!archived.length) {
-        document.getElementById('archived-body').innerHTML = '<tr><td colspan="5" style="padding:16px;text-align:center;color:var(--text2);">No archived homes.</td></tr>';
-        return;
-      }
-      archived.sort(function(a, b) { return (a.name||'').localeCompare(b.name||''); });
-      document.getElementById('archived-body').innerHTML = archived.map(function(h) {
-        var rate = h.rate > 0 ? '$' + h.rate.toFixed(0) : '-';
-        return '<tr style="border-bottom:1px solid var(--border);opacity:0.7;">' +
-          '<td style="padding:10px;">' + getRegionBadge(h.region) + '</td>' +
-          '<td style="padding:10px;font-weight:500;">' + (h.name || '-') + '</td>' +
-          '<td style="padding:10px;font-size:12px;">' + (h.city || '-') + '</td>' +
-          '<td style="padding:10px;font-family:JetBrains Mono,monospace;color:var(--text2);">' + rate + '</td>' +
-          '<td style="padding:10px;">' +
-            '<button onclick="unarchiveHome(\'' + h.id + '\')" style="background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.3);color:var(--accent);cursor:pointer;padding:4px 10px;border-radius:6px;font-size:12px;" title="Restore">â»ï¸ Restore</button>' +
-          '</td>' +
-        '</tr>';
-      }).join('');
-    }
-
-    async function archiveHome(id) {
-      var h = allHomes.find(function(x) { return x.id === id; });
-      if (!h) return;
-      if (!confirm('Archive "' + (h.name||'this home') + '"? It will be moved to the archived section.')) return;
-      await fetch('/api/properties/' + id + '/archive', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({archived:true})});
-      loadHomes();
-    }
-
-    async function unarchiveHome(id) {
-      await fetch('/api/properties/' + id + '/archive', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({archived:false})});
-      loadHomes();
-    }
-
-    function toggleArchivedHomes() {
-      var container = document.getElementById('archived-homes-container');
-      var toggle = document.getElementById('archived-toggle');
-      if (container.style.display === 'none') {
-        container.style.display = 'block';
-        toggle.textContent = 'â¼';
-      } else {
-        container.style.display = 'none';
-        toggle.textContent = 'â¶';
-      }
     }
     
     function editHome(id) {
@@ -1237,16 +1147,14 @@
       document.getElementById('home-state').value = h.state || '';
       document.getElementById('home-owner').value = h.owner_manager || '';
       document.getElementById('home-beds').value = h.beds || 0;
-      document.getElementById('home-bedcount').value = h.bed_count || 0;
-      document.getElementById('home-sqft').value = h.sqft || 0;
       document.getElementById('home-baths').value = h.baths || 0;
       document.getElementById('home-rate').value = h.rate || 0;
       document.getElementById('home-deeprate').value = h.deep_clean_rate || 0;
       document.getElementById('home-bedcount').value = h.bed_count || 0;
       document.getElementById('home-sqft').value = h.sqft || 0;
       document.getElementById('home-stripelink').value = h.stripe_link || '';
-      document.getElementById('homes-form-title').textContent = 'âï¸ Edit: ' + (h.name || 'Home');
-      document.getElementById('home-save-btn').textContent = 'ð¾ Save Changes';
+      document.getElementById('homes-form-title').textContent = '\u{270F}\u{FE0F} Edit: ' + (h.name || 'Home');
+      document.getElementById('home-save-btn').textContent = '\u{1F4BE} Save Changes';
       document.getElementById('home-cancel-btn').style.display = 'inline-flex';
       document.getElementById('homes-form-title').scrollIntoView({behavior:'smooth'});
     }
@@ -1260,16 +1168,14 @@
       document.getElementById('home-state').value = '';
       document.getElementById('home-owner').value = '';
       document.getElementById('home-beds').value = '0';
-      document.getElementById('home-bedcount').value = '0';
-      document.getElementById('home-sqft').value = '0';
       document.getElementById('home-baths').value = '0';
       document.getElementById('home-rate').value = '0';
       document.getElementById('home-deeprate').value = '0';
       document.getElementById('home-bedcount').value = '0';
       document.getElementById('home-sqft').value = '0';
       document.getElementById('home-stripelink').value = '';
-      document.getElementById('homes-form-title').textContent = 'â Add New Home';
-      document.getElementById('home-save-btn').textContent = 'ð¾ Add Home';
+      document.getElementById('homes-form-title').textContent = '\u{2795} Add New Home';
+      document.getElementById('home-save-btn').textContent = '\u{1F4BE} Add Home';
       document.getElementById('home-cancel-btn').style.display = 'none';
     }
     
@@ -1286,8 +1192,6 @@
         state: document.getElementById('home-state').value.trim(),
         owner_manager: document.getElementById('home-owner').value.trim(),
         beds: parseInt(document.getElementById('home-beds').value) || 0,
-        bed_count: parseInt(document.getElementById('home-bedcount').value) || 0,
-        sqft: parseInt(document.getElementById('home-sqft').value) || 0,
         baths: parseFloat(document.getElementById('home-baths').value) || 0,
         rate: parseFloat(document.getElementById('home-rate').value) || 0,
         deep_clean_rate: parseFloat(document.getElementById('home-deeprate').value) || 0,
