@@ -415,6 +415,16 @@ app.delete("/api/properties/:id", (req, res) => {
   }
 });
 
+// Archive / unarchive a property
+app.post("/api/properties/:id/archive", (req, res) => {
+  const db = getDb();
+  const prop = db.prepare("SELECT id, archived FROM properties WHERE id = ?").get(req.params.id);
+  if (!prop) return res.status(404).json({ error: "Property not found" });
+  const newVal = req.body.archived !== undefined ? (req.body.archived ? 1 : 0) : (prop.archived ? 0 : 1);
+  db.prepare("UPDATE properties SET archived = ?, updated_at = datetime('now') WHERE id = ?").run(newVal, req.params.id);
+  res.json({ ok: true, archived: newVal === 1 });
+});
+
 // --- Breezeway sync ---
 app.post("/api/sync/properties", async (req, res) => {
   try { const data = await bw.syncProperties(); res.json({ count: data.length }); }
@@ -1117,6 +1127,20 @@ cron.schedule("0 18 * * *", async () => {
     await bw.syncTasksForDate(getEasternDate(1));
     await bw.syncTasksForDate(getEasternDate(2));
   } catch (e) { console.error("[CRON] Evening sync error:", e.message); }
+});
+
+// 3:00 AM daily: Backfill sync — re-sync the past 14 days to catch any jobs
+// that were completed on Breezeway after the original sync ran for that date
+cron.schedule("0 3 * * *", async () => {
+  try {
+    console.log("[CRON] Backfill sync - past 14 days");
+    for (let i = 2; i <= 14; i++) {
+      await bw.syncTasksForDate(getEasternDate(-i));
+      // Small delay between days to avoid overwhelming Breezeway API
+      await new Promise(r => setTimeout(r, 2000));
+    }
+    console.log("[CRON] Backfill sync complete");
+  } catch (e) { console.error("[CRON] Backfill sync error:", e.message); }
 });
 
 // ═══════════════════════════════════════════════════════
