@@ -42,9 +42,9 @@ async function sendEmail({ to, cc, subject, text, html }) {
 
 const PORT = process.env.PORT || 3000;
 
-// ═══════════════════════════════════════════════════════
-// API ROUTES — Dashboard
-// ═══════════════════════════════════════════════════════
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// API ROUTES â Dashboard
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 // --- Jobs ---
 app.get("/api/jobs", (req, res) => {
@@ -364,9 +364,9 @@ app.post("/api/jobs/:jobId/report-verified", (req, res) => {
   res.json({ ok: true });
 });
 
-// ═══════════════════════════════════════════════════════
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 // PROPERTY MANAGEMENT (Homes)
-// ═══════════════════════════════════════════════════════
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 // Get all properties with enhanced fields
 app.get("/api/properties/all", (req, res) => {
@@ -381,10 +381,10 @@ app.post("/api/properties/:id/update", (req, res) => {
   const p = req.body;
   db.prepare(`UPDATE properties SET 
     name=?, address=?, beds=?, baths=?, rate=?, deep_clean_rate=?,
-    region=?, city=?, state=?, owner_manager=?, stripe_link=?, updated_at=datetime('now')
+    region=?, city=?, state=?, owner_manager=?, stripe_link=?, bed_count=?, sqft=?, updated_at=datetime('now')
     WHERE id = ?`).run(
     p.name||'', p.address||'', p.beds||0, p.baths||0, p.rate||0, p.deep_clean_rate||0,
-    p.region||'', p.city||'', p.state||'', p.owner_manager||'', p.stripe_link||'', req.params.id
+    p.region||'', p.city||'', p.state||'', p.owner_manager||'', p.stripe_link||'', p.bed_count||0, p.sqft||0, req.params.id
   );
   res.json({ ok: true });
 });
@@ -586,7 +586,7 @@ app.post("/api/send-schedule", async (req, res) => {
       // Time-appropriate greeting
       const hour = new Date().getHours();
       let greetEn, greetEs;
-      if (hour < 12) { greetEn = "Good morning"; greetEs = "Buenos días"; }
+      if (hour < 12) { greetEn = "Good morning"; greetEs = "Buenos dÃ­as"; }
       else if (hour < 18) { greetEn = "Good afternoon"; greetEs = "Buenas tardes"; }
       else { greetEn = "Good evening"; greetEs = "Buenas noches"; }
       
@@ -735,13 +735,13 @@ app.post("/api/send-owner-notifications", async (req, res) => {
       const firstName = owner.name.split(" ")[0];
       
       if (isVacant) {
-        // Vacant unit — simple notification, no ask for special instructions
+        // Vacant unit â simple notification, no ask for special instructions
         emailSubject = `HostTurn Cleaning Scheduled - ${propShort} - ${dateStr}`;
-        emailText = `Hi ${firstName},\n\nJust a heads up — we have ${propShort} scheduled for cleaning on ${dateStr}.\n\nThank you!\nHostTurn Team\nhostturn.com`;
-        emailHtml = `<p>Hi ${firstName},</p><p>Just a heads up — we have <strong>${propShort}</strong> scheduled for cleaning on <strong>${dateStr}</strong>.</p><p>Thank you!<br>HostTurn Team<br><a href="https://hostturn.com">hostturn.com</a></p>`;
-        smsMsg = `HostTurn: Hi ${firstName}, just a heads up — we have ${propShort} scheduled for cleaning on ${dateStr}. Thank you!`;
+        emailText = `Hi ${firstName},\n\nJust a heads up â we have ${propShort} scheduled for cleaning on ${dateStr}.\n\nThank you!\nHostTurn Team\nhostturn.com`;
+        emailHtml = `<p>Hi ${firstName},</p><p>Just a heads up â we have <strong>${propShort}</strong> scheduled for cleaning on <strong>${dateStr}</strong>.</p><p>Thank you!<br>HostTurn Team<br><a href="https://hostturn.com">hostturn.com</a></p>`;
+        smsMsg = `HostTurn: Hi ${firstName}, just a heads up â we have ${propShort} scheduled for cleaning on ${dateStr}. Thank you!`;
       } else {
-        // Same-day checkout — ask to confirm checkout time
+        // Same-day checkout â ask to confirm checkout time
         emailSubject = `HostTurn Cleaning Scheduled - ${propShort} - ${dateStr}`;
         emailText = `Hi ${firstName},\n\nWe have ${propShort} scheduled for cleaning on ${dateStr}.\n\nCan you please confirm the checkout time? If checkout is at ${checkoutTime}, no action needed.\n\nIf the checkout time is different, please reply to this email with the correct time.\n\nThank you!\nHostTurn Team\nhostturn.com`;
         emailHtml = `<p>Hi ${firstName},</p><p>We have <strong>${propShort}</strong> scheduled for cleaning on <strong>${dateStr}</strong>.</p><p>Can you please confirm the checkout time? If checkout is at <strong>${checkoutTime}</strong>, no action needed.</p><p>If the checkout time is different, please reply to this email with the correct time.</p><p>Thank you!<br>HostTurn Team<br><a href="https://hostturn.com">hostturn.com</a></p>`;
@@ -877,7 +877,7 @@ app.post("/api/send-closeout-email", async (req, res) => {
     const htmlBody = `
       <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
         <div style="background:#1a1d27;padding:20px;border-radius:8px 8px 0 0;">
-          <h2 style="color:#22c55e;margin:0;">HostTurn — Cleaning Complete ✅</h2>
+          <h2 style="color:#22c55e;margin:0;">HostTurn â Cleaning Complete â</h2>
         </div>
         <div style="background:#f9f9f9;padding:24px;border-radius:0 0 8px 8px;">
           <p>Hi ${owner.name.split(" ")[0]},</p>
@@ -887,7 +887,7 @@ app.post("/api/send-closeout-email", async (req, res) => {
           ${paymentHtml}
           <p>Thank you for the opportunity to service your home!</p>
           <p style="color:#888;font-size:12px;margin-top:24px;">
-            HostTurn — Short-Term Rental Cleaning<br>
+            HostTurn â Short-Term Rental Cleaning<br>
             <a href="https://hostturn.com" style="color:#22c55e;">hostturn.com</a>
           </p>
         </div>
@@ -898,7 +898,7 @@ app.post("/api/send-closeout-email", async (req, res) => {
     await sendEmail({
       to: owner.email,
       cc: ccList,
-      subject: `HostTurn — Cleaning Complete: ${propShort} — ${dateStr}`,
+      subject: `HostTurn â Cleaning Complete: ${propShort} â ${dateStr}`,
       text: textBody,
       html: htmlBody
     });
@@ -977,13 +977,13 @@ app.post("/api/send-closeout-emails-batch", async (req, res) => {
           }
         }
         
-        const htmlBody = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;"><div style="background:#1a1d27;padding:20px;border-radius:8px 8px 0 0;"><h2 style="color:#22c55e;margin:0;">HostTurn — Cleaning Complete ✅</h2></div><div style="background:#f9f9f9;padding:24px;border-radius:0 0 8px 8px;"><p>Hi ${owner.name.split(" ")[0]},</p><p>Great news! <strong>${propShort}</strong> has been cleaned and is guest-ready.</p><p><strong>Date:</strong> ${dateStr}</p>${photosSection}${paymentHtml}<p>Thank you for the opportunity to service your home!</p><p style="color:#888;font-size:12px;margin-top:24px;">HostTurn — Short-Term Rental Cleaning<br><a href="https://hostturn.com" style="color:#22c55e;">hostturn.com</a></p></div></div>`;
+        const htmlBody = `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;"><div style="background:#1a1d27;padding:20px;border-radius:8px 8px 0 0;"><h2 style="color:#22c55e;margin:0;">HostTurn â Cleaning Complete â</h2></div><div style="background:#f9f9f9;padding:24px;border-radius:0 0 8px 8px;"><p>Hi ${owner.name.split(" ")[0]},</p><p>Great news! <strong>${propShort}</strong> has been cleaned and is guest-ready.</p><p><strong>Date:</strong> ${dateStr}</p>${photosSection}${paymentHtml}<p>Thank you for the opportunity to service your home!</p><p style="color:#888;font-size:12px;margin-top:24px;">HostTurn â Short-Term Rental Cleaning<br><a href="https://hostturn.com" style="color:#22c55e;">hostturn.com</a></p></div></div>`;
         const textBody = `Hi ${owner.name.split(" ")[0]},\n\nGreat news! ${propShort} has been cleaned and is guest-ready.\n\nDate: ${dateStr}\n${reportUrl ? "\nCompletion Photos & Report:\n" + reportUrl + "\n" : ""}${paymentText}\n\nThank you for the opportunity to service your home!\n\nhostturn.com`;
         
         await sendEmail({
           to: owner.email,
           cc: ccList,
-          subject: `HostTurn — Cleaning Complete: ${propShort} — ${dateStr}`,
+          subject: `HostTurn â Cleaning Complete: ${propShort} â ${dateStr}`,
           text: textBody,
           html: htmlBody
         });
@@ -1026,9 +1026,9 @@ app.get("/api/stats", (req, res) => {
   });
 });
 
-// ═══════════════════════════════════════════════════════
-// WEBHOOKS — Breezeway & Twilio
-// ═══════════════════════════════════════════════════════
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// WEBHOOKS â Breezeway & Twilio
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 // Breezeway task webhook
 app.post("/webhook/breezeway", async (req, res) => {
@@ -1066,9 +1066,9 @@ app.post("/webhook/twilio", async (req, res) => {
   }
 });
 
-// ═══════════════════════════════════════════════════════
-// CRON JOBS — The Automation Schedule
-// ═══════════════════════════════════════════════════════
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// CRON JOBS â The Automation Schedule
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 // Every 5 minutes: check arrival status + poll Breezeway
 cron.schedule("*/5 * * * *", async () => {
@@ -1129,7 +1129,7 @@ cron.schedule("0 18 * * *", async () => {
   } catch (e) { console.error("[CRON] Evening sync error:", e.message); }
 });
 
-// 3:00 AM daily: Backfill sync — re-sync the past 14 days to catch any jobs
+// 3:00 AM daily: Backfill sync â re-sync the past 14 days to catch any jobs
 // that were completed on Breezeway after the original sync ran for that date
 cron.schedule("0 3 * * *", async () => {
   try {
@@ -1143,9 +1143,9 @@ cron.schedule("0 3 * * *", async () => {
   } catch (e) { console.error("[CRON] Backfill sync error:", e.message); }
 });
 
-// ═══════════════════════════════════════════════════════
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 // PROPERTY MANAGEMENT
-// ═══════════════════════════════════════════════════════
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 // Get all properties with full details
 app.get("/api/properties/all", (req, res) => {
@@ -1168,9 +1168,9 @@ app.get("/api/properties/all", (req, res) => {
   res.json(result);
 });
 
-// ═══════════════════════════════════════════════════════
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 // RATE CALCULATOR & PROSPECTS
-// ═══════════════════════════════════════════════════════
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 // Get all prospects
 app.get("/api/prospects", (req, res) => {
@@ -1228,15 +1228,15 @@ app.delete("/api/prospects/:id", (req, res) => {
   res.json({ ok: true });
 });
 
-// ═══════════════════════════════════════════════════════
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 // START
-// ═══════════════════════════════════════════════════════
+// âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 
 // Initialize DB on startup
 getDb();
 
 app.listen(PORT, () => {
-  console.log(`\n🏠 HostTurn Ops running on port ${PORT}`);
+  console.log(`\nð  HostTurn Ops running on port ${PORT}`);
   console.log(`   Dashboard: http://localhost:${PORT}`);
   console.log(`   API: http://localhost:${PORT}/api/`);
   console.log(`   BW Webhook: ${process.env.BASE_URL || "http://localhost:" + PORT}/webhook/breezeway`);
