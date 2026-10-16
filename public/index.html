@@ -360,6 +360,29 @@
           </table>
         </div>
       </div>
+      <!-- Archived Homes -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;margin-top:24px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;" onclick="toggleArchivedHomes()">
+          <h3 style="margin:0;font-size:16px;color:var(--text2);">📦 Archived Homes (<span id="archived-count">0</span>)</h3>
+          <span id="archived-toggle" style="font-size:18px;color:var(--text2);">▶</span>
+        </div>
+        <div id="archived-homes-container" style="display:none;margin-top:16px;">
+          <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead>
+                <tr style="background:var(--surface2);text-align:left;">
+                  <th style="padding:10px;border-bottom:1px solid var(--border);">Region</th>
+                  <th style="padding:10px;border-bottom:1px solid var(--border);">Property</th>
+                  <th style="padding:10px;border-bottom:1px solid var(--border);">City</th>
+                  <th style="padding:10px;border-bottom:1px solid var(--border);">Std Rate</th>
+                  <th style="padding:10px;border-bottom:1px solid var(--border);">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="archived-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
   <script>
@@ -1045,18 +1068,22 @@
     var allHomes = [];
     var homesSortCol = 'region';
     var homesSortDir = 1;
-    
+
     async function loadHomes() {
       try {
         var r = await fetch('/api/properties/all');
         allHomes = await r.json();
-        document.getElementById('homes-count').textContent = allHomes.length;
+        var active = allHomes.filter(function(h) { return !h.archived; });
+        var archived = allHomes.filter(function(h) { return h.archived; });
+        document.getElementById('homes-count').textContent = active.length;
+        document.getElementById('archived-count').textContent = archived.length;
         renderHomes();
+        renderArchivedHomes();
       } catch(e) {
         document.getElementById('homes-body').innerHTML = '<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--text2)">Error: ' + e.message + '</td></tr>';
       }
     }
-    
+
     function sortHomes(col) {
       if (homesSortCol === col) {
         homesSortDir = -homesSortDir;
@@ -1066,14 +1093,24 @@
       }
       renderHomes();
     }
-    
+
     function filterHomes() {
       renderHomes();
     }
-    
+
+    function getRegionBadge(region) {
+      if (region === 'Southern VT') return '<span style="background:rgba(34,197,94,0.15);color:var(--accent);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">S. VT</span>';
+      if (region === 'Champlain Valley, VT') return '<span style="background:rgba(168,85,247,0.15);color:#a855f7;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">CV VT</span>';
+      if (region === 'Hudson Valley, NY') return '<span style="background:rgba(59,130,246,0.15);color:var(--blue);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">HV NY</span>';
+      if (region === 'Jersey Shore, NJ') return '<span style="background:rgba(236,72,153,0.15);color:#ec4899;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">JS NJ</span>';
+      if (region === 'Poconos, PA') return '<span style="background:rgba(245,158,11,0.15);color:var(--warn);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">PA</span>';
+      return '<span style="color:var(--text2);font-size:11px;">' + (region || '-') + '</span>';
+    }
+
     function renderHomes() {
       var search = (document.getElementById('homes-search').value || '').toLowerCase();
       var homes = allHomes.filter(function(h) {
+        if (h.archived) return false;
         if (!search) return true;
         return (h.name||'').toLowerCase().includes(search) ||
           (h.region||'').toLowerCase().includes(search) ||
@@ -1081,34 +1118,28 @@
           (h.owner_manager||'').toLowerCase().includes(search) ||
           (h.address||'').toLowerCase().includes(search);
       });
-      
+
       homes.sort(function(a, b) {
         var va = a[homesSortCol] || '';
         var vb = b[homesSortCol] || '';
         if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * homesSortDir;
         return String(va).localeCompare(String(vb)) * homesSortDir;
       });
-      
+
       if (!homes.length) {
         document.getElementById('homes-body').innerHTML = '<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--text2)">No homes found.</td></tr>';
         return;
       }
-      
+
       document.getElementById('homes-body').innerHTML = homes.map(function(h) {
         var rate = h.rate > 0 ? '$' + h.rate.toFixed(0) : '-';
         var deep = h.deep_clean_rate > 0 ? '$' + h.deep_clean_rate.toFixed(0) : '-';
-        var regionBadge = '';
-        if (h.region === 'Southern VT') regionBadge = '<span style="background:rgba(34,197,94,0.15);color:var(--accent);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">S. VT</span>';
-        else if (h.region === 'Champlain Valley, VT') regionBadge = '<span style="background:rgba(168,85,247,0.15);color:#a855f7;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">CV VT</span>';
-        else if (h.region === 'Hudson Valley, NY') regionBadge = '<span style="background:rgba(59,130,246,0.15);color:var(--blue);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">HV NY</span>';
-        else if (h.region === 'Jersey Shore, NJ') regionBadge = '<span style="background:rgba(236,72,153,0.15);color:#ec4899;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">JS NJ</span>';
-        else if (h.region === 'Poconos, PA') regionBadge = '<span style="background:rgba(245,158,11,0.15);color:var(--warn);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;">PA</span>';
-        else regionBadge = '<span style="color:var(--text2);font-size:11px;">' + (h.region || '-') + '</span>';
-        
+        var regionBadge = getRegionBadge(h.region);
+
         var propName = h.name || '-';
         var city = h.city || '-';
         var owner = h.owner_manager || '-';
-        
+
         return '<tr style="border-bottom:1px solid var(--border);">' +
           '<td style="padding:10px;">' + regionBadge + '</td>' +
           '<td style="padding:10px;font-weight:500;">' + propName + '</td>' +
@@ -1118,9 +1149,58 @@
           '<td style="padding:10px;text-align:center;">' + (h.baths || '-') + '</td>' +
           '<td style="padding:10px;font-family:JetBrains Mono,monospace;font-weight:600;color:var(--accent);">' + rate + '</td>' +
           '<td style="padding:10px;font-family:JetBrains Mono,monospace;color:var(--blue);">' + deep + '</td>' +
-          '<td style="padding:10px;"><button onclick="editHome(\'' + h.id + '\')" style="background:none;border:none;cursor:pointer;font-size:14px;" title="Edit">✏️</button></td>' +
+          '<td style="padding:10px;">' +
+            '<button onclick="editHome(\'' + h.id + '\')" style="background:none;border:none;cursor:pointer;font-size:14px;" title="Edit">✏️</button>' +
+            '<button onclick="archiveHome(\'' + h.id + '\')" style="background:none;border:none;cursor:pointer;font-size:14px;margin-left:4px;" title="Archive">📦</button>' +
+          '</td>' +
         '</tr>';
       }).join('');
+    }
+
+    function renderArchivedHomes() {
+      var archived = allHomes.filter(function(h) { return h.archived; });
+      if (!archived.length) {
+        document.getElementById('archived-body').innerHTML = '<tr><td colspan="5" style="padding:16px;text-align:center;color:var(--text2);">No archived homes.</td></tr>';
+        return;
+      }
+      archived.sort(function(a, b) { return (a.name||'').localeCompare(b.name||''); });
+      document.getElementById('archived-body').innerHTML = archived.map(function(h) {
+        var rate = h.rate > 0 ? '$' + h.rate.toFixed(0) : '-';
+        return '<tr style="border-bottom:1px solid var(--border);opacity:0.7;">' +
+          '<td style="padding:10px;">' + getRegionBadge(h.region) + '</td>' +
+          '<td style="padding:10px;font-weight:500;">' + (h.name || '-') + '</td>' +
+          '<td style="padding:10px;font-size:12px;">' + (h.city || '-') + '</td>' +
+          '<td style="padding:10px;font-family:JetBrains Mono,monospace;color:var(--text2);">' + rate + '</td>' +
+          '<td style="padding:10px;">' +
+            '<button onclick="unarchiveHome(\'' + h.id + '\')" style="background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.3);color:var(--accent);cursor:pointer;padding:4px 10px;border-radius:6px;font-size:12px;" title="Restore">♻️ Restore</button>' +
+          '</td>' +
+        '</tr>';
+      }).join('');
+    }
+
+    async function archiveHome(id) {
+      var h = allHomes.find(function(x) { return x.id === id; });
+      if (!h) return;
+      if (!confirm('Archive "' + (h.name||'this home') + '"? It will be moved to the archived section.')) return;
+      await fetch('/api/properties/' + id + '/archive', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({archived:true})});
+      loadHomes();
+    }
+
+    async function unarchiveHome(id) {
+      await fetch('/api/properties/' + id + '/archive', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({archived:false})});
+      loadHomes();
+    }
+
+    function toggleArchivedHomes() {
+      var container = document.getElementById('archived-homes-container');
+      var toggle = document.getElementById('archived-toggle');
+      if (container.style.display === 'none') {
+        container.style.display = 'block';
+        toggle.textContent = '▼';
+      } else {
+        container.style.display = 'none';
+        toggle.textContent = '▶';
+      }
     }
     
     function editHome(id) {
