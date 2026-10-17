@@ -35,6 +35,14 @@
     .btn:disabled { opacity:0.5; cursor:not-allowed; }
     .btn.blue { background:var(--blue); color:#fff; }
     .btn.blue:hover { background:#2563eb; }
+    .notes-tooltip-wrap { position:relative; display:inline-block; }
+    .notes-tooltip-wrap .notes-tooltip { display:none; position:absolute; bottom:calc(100% + 8px); left:50%; transform:translateX(-50%); background:var(--surface2); border:1px solid var(--border); border-radius:10px; padding:12px 14px; min-width:260px; max-width:340px; z-index:999; box-shadow:0 8px 24px rgba(0,0,0,0.4); pointer-events:none; }
+    .notes-tooltip-wrap:hover .notes-tooltip { display:block; }
+    .notes-tooltip .nt-item { padding:6px 0; border-bottom:1px solid var(--border); }
+    .notes-tooltip .nt-item:last-child { border-bottom:none; }
+    .notes-tooltip .nt-text { font-size:12px; color:var(--text); line-height:1.4; }
+    .notes-tooltip .nt-date { font-size:10px; color:var(--text2); margin-top:2px; }
+    .notes-tooltip .nt-arrow { position:absolute; bottom:-6px; left:50%; transform:translateX(-50%) rotate(45deg); width:10px; height:10px; background:var(--surface2); border-right:1px solid var(--border); border-bottom:1px solid var(--border); }
     .jobs-grid { display:flex; flex-direction:column; gap:12px; }
     .job-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; display:grid; grid-template-columns:1fr 160px 100px 60px auto; align-items:center; gap:12px; transition:all 0.2s; }
     .job-card:hover { border-color:var(--accent); background:var(--surface2); }
@@ -1101,6 +1109,20 @@
       renderHomes();
     }
     
+    function buildNotesCell(propId) {
+      var data = homeNoteCounts[propId];
+      if (!data || !data.count) return '<span style="color:var(--text2);font-size:11px;">-</span>';
+      var tooltip = '<div class="notes-tooltip"><div class="nt-arrow"></div>';
+      (data.previews || []).forEach(function(p) {
+        var d = new Date(p.created_at + 'Z');
+        var ds = d.toLocaleDateString('en-US', {month:'short', day:'numeric'}) + ' ' + d.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
+        tooltip += '<div class="nt-item"><div class="nt-text">' + escapeHtml(p.note) + '</div><div class="nt-date">' + ds + '</div></div>';
+      });
+      if (data.count > 5) tooltip += '<div class="nt-item"><div class="nt-text" style="color:var(--text2);font-style:italic;">+ ' + (data.count - 5) + ' more...</div></div>';
+      tooltip += '</div>';
+      return '<div class="notes-tooltip-wrap"><button onclick="editHome(\'' + propId + '\')" style="background:rgba(59,130,246,0.15);color:var(--blue);border:none;cursor:pointer;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">' + data.count + '</button>' + tooltip + '</div>';
+    }
+
     function renderHomes() {
       var search = (document.getElementById('homes-search').value || '').toLowerCase();
       var homes = allHomes.filter(function(h) {
@@ -1148,7 +1170,7 @@
           '<td style="padding:10px;text-align:center;">' + (h.baths || '-') + '</td>' +
           '<td style="padding:10px;font-family:JetBrains Mono,monospace;font-weight:600;color:var(--accent);">' + rate + '</td>' +
           '<td style="padding:10px;font-family:JetBrains Mono,monospace;color:var(--blue);">' + deep + '</td>' +
-          '<td style="padding:10px;text-align:center;">' + (homeNoteCounts[h.id] ? '<button onclick="editHome(\'' + h.id + '\')" style="background:rgba(59,130,246,0.15);color:var(--blue);border:none;cursor:pointer;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;" title="View notes">' + homeNoteCounts[h.id] + '</button>' : '<span style="color:var(--text2);font-size:11px;">-</span>') + '</td>' +
+          '<td style="padding:10px;text-align:center;">' + buildNotesCell(h.id) + '</td>' +
           '<td style="padding:10px;"><button onclick="editHome(\'' + h.id + '\')" style="background:none;border:none;cursor:pointer;font-size:14px;" title="Edit">&#9999;&#65039;</button></td>' +
         '</tr>';
       }).join('');
@@ -1274,6 +1296,7 @@
         });
         input.value = '';
         loadPropertyNotes(propertyId);
+        refreshNoteCounts();
       } catch(e) {
         alert('Error adding note: ' + e.message);
       }
@@ -1285,9 +1308,18 @@
       try {
         await fetch('/api/properties/' + propertyId + '/notes/' + noteId, { method: 'DELETE' });
         loadPropertyNotes(propertyId);
+        refreshNoteCounts();
       } catch(e) {
         alert('Error deleting note: ' + e.message);
       }
+    }
+
+    async function refreshNoteCounts() {
+      try {
+        var nc = await fetch('/api/properties/notes-counts');
+        homeNoteCounts = await nc.json();
+        renderHomes();
+      } catch(e) {}
     }
 
     function escapeHtml(str) {
