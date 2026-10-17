@@ -1244,6 +1244,484 @@ app.delete("/api/prospects/:id", (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════
+// TRIPPYLEADS API ROUTES
+// ═══════════════════════════════════════════════════════
+
+// Simple password hashing (bcrypt-like but no extra dep)
+const crypto = require("crypto");
+function hashPassword(pw) {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const hash = crypto.scryptSync(pw, salt, 64).toString("hex");
+  return salt + ":" + hash;
+}
+function verifyPassword(pw, stored) {
+  const [salt, hash] = stored.split(":");
+  const test = crypto.scryptSync(pw, salt, 64).toString("hex");
+  return test === hash;
+}
+
+// Simple session tokens (in-memory for now)
+const pmSessions = {};
+function createPmSession(pmId) {
+  const token = crypto.randomBytes(32).toString("hex");
+  pmSessions[token] = { pmId, created: Date.now() };
+  return token;
+}
+function getPmFromToken(req) {
+  const auth = req.headers.authorization;
+  if (!auth || !auth.startsWith("Bearer ")) return null;
+  const token = auth.slice(7);
+  const session = pmSessions[token];
+  if (!session) return null;
+  // 24hr expiry
+  if (Date.now() - session.created > 24 * 60 * 60 * 1000) {
+    delete pmSessions[token];
+    return null;
+  }
+  return session.pmId;
+}
+
+// Admin auth middleware (uses same admin check as main app - simple header)
+function isAdmin(req) {
+  const key = req.headers["x-admin-key"] || req.query.admin_key;
+  return key === (process.env.ADMIN_KEY || "hostturn2024");
+}
+
+// --- Admin: Manage Leads ---
+app.get("/api/tl/admin/leads", (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ error: "Unauthorized" });
+  const db = getDb();
+  const leads = db.prepare(`
+    SELECT l.*,
+      p.company_name as buyer_company, p.contact_name as buyer_name
+    FROM tl_leads l
+    LEFT JOIN tl_property_managers p ON l.purchased_by = p.id
+    ORDER BY l.created_at DESC
+  `).all();
+  res.json(leads);
+});
+
+app.post("/api/tl/admin/leads", (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ error: "Unauthorized" });
+  const db = getDb();
+  const { owner_name, owner_email, owner_phone, property_address, city, state, zip, bedrooms, bathrooms, property_type, listing_url, notes, warm_intro } = req.body;
+
+  // Auto-price based on bedrooms
+  let price = 250;
+  const beds = parseInt(bedrooms) || 1;
+  if (beds <= 2) price = 250;
+  else if (beds === 3) price = 350;
+  else if (beds === 4) price = 450;
+  else price = 550;
+
+  const result = db.prepare(`
+    INSERT INTO tl_leads (owner_name, owner_email, owner_phone, property_address, city, state, zip, bedrooms, bathrooms, property_type, listing_url, notes, warm_intro, price)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(owner_name || '', owner_email || '', owner_phone || '', property_address || '', city || '', state || '', zip || '', beds, parseFloat(bathrooms) || 1, property_type || 'entire_home', listing_url || '', notes || '', warm_intro ? 1 : 0, price);
+
+  res.json({ ok: true, id: result.lastInsertRowid, price });
+});
+
+app.post("/api/tl/admin/leads/:id", (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ error: "Unauthorized" });
+  const db = getDb();
+  const { owner_name, owner_email, owner_phone, property_address, city, state, zip, bedrooms, bathrooms, property_type, listing_url, notes, warm_intro, price } = req.body;
+
+  db.prepare(`
+    UPDATE tl_leads SET owner_name=?, owner_email=?, owner_phone=?, property_address=?, city=?, state=?, zip=?, bedrooms=?, bathrooms=?, property_type=?, listing_url=?, notes=?, warm_intro=?, price=?, updated_at=datetime('now')
+    WHERE id=?
+  `).run(owner_name, owner_email, owner_phone, property_address, city, state, zip, parseInt(bedrooms) || 1, parseFloat(bathrooms) || 1, property_type, listing_url, notes, warm_intro ? 1 : 0, parseFloat(price) || 250, req.params.id);
+
+  res.json({ ok: true });
+});
+
+app.delete("/api/tl/admin/leads/:id", (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ error: "Unauthorized" });
+  const db = getDb();
+  const lead = db.prepare("SELECT status FROM tl_leads WHERE id=?").get(req.params.id);
+  if (lead && lead.status === "sold") return res.status(400).json({ error: "Cannot delete a sold lead" });
+  db.prepare("DELETE FROM tl_cart WHERE lead_id=?").run(req.params.id);
+  db.prepare("DELETE FROM tl_leads WHERE id=?").run(req.params.id);
+  res.json({ ok: true });
+});
+
+// --- Admin: Manage Property Managers ---
+app.get("/api/tl/admin/pms", (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ error: "Unauthorized" });
+  const db = getDb();
+  const pms = db.prepare("SELECT id, company_name, contact_name, email, phone, is_active, subscription_status, created_at FROM tl_property_managers ORDER BY created_at DESC").all();
+  res.json(pms);
+});
+
+app.post("/api/tl/admin/pms", (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ error: "Unauthorized" });
+  const db = getDb();
+  const { company_name, contact_name, email, phone, password } = req.body;
+  if (!email || !password) return res.status(400).json({ error: "Email and password required" });
+
+  const existing = db.prepare("SELECT id FROM tl_property_managers WHERE email=?").get(email);
+  if (existing) return res.status(400).json({ error: "Email already registered" });
+
+  const hashed = hashPassword(password);
+  const result = db.prepare(`
+    INSERT INTO tl_property_managers (company_name, contact_name, email, phone, password_hash)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(company_name || '', contact_name || '', email, phone || '', hashed);
+
+  res.json({ ok: true, id: result.lastInsertRowid });
+});
+
+app.post("/api/tl/admin/pms/:id/toggle", (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ error: "Unauthorized" });
+  const db = getDb();
+  const pm = db.prepare("SELECT is_active FROM tl_property_managers WHERE id=?").get(req.params.id);
+  if (!pm) return res.status(404).json({ error: "Not found" });
+  db.prepare("UPDATE tl_property_managers SET is_active=?, updated_at=datetime('now') WHERE id=?").run(pm.is_active ? 0 : 1, req.params.id);
+  res.json({ ok: true, is_active: !pm.is_active });
+});
+
+// --- Admin: View Purchases ---
+app.get("/api/tl/admin/purchases", (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ error: "Unauthorized" });
+  const db = getDb();
+  const purchases = db.prepare(`
+    SELECT pu.*, l.owner_name, l.property_address, l.city, l.state, l.bedrooms,
+      pm.company_name, pm.contact_name, pm.email as pm_email
+    FROM tl_purchases pu
+    JOIN tl_leads l ON pu.lead_id = l.id
+    JOIN tl_property_managers pm ON pu.pm_id = pm.id
+    ORDER BY pu.purchased_at DESC
+  `).all();
+  res.json(purchases);
+});
+
+// --- PM Auth ---
+app.post("/api/tl/pm/login", (req, res) => {
+  const db = getDb();
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ error: "Email and password required" });
+
+  const pm = db.prepare("SELECT * FROM tl_property_managers WHERE email=?").get(email);
+  if (!pm) return res.status(401).json({ error: "Invalid credentials" });
+  if (!pm.is_active) return res.status(403).json({ error: "Account is inactive. Contact HostTurn." });
+  if (!verifyPassword(password, pm.password_hash)) return res.status(401).json({ error: "Invalid credentials" });
+
+  const token = createPmSession(pm.id);
+  res.json({ ok: true, token, pm: { id: pm.id, company_name: pm.company_name, contact_name: pm.contact_name, email: pm.email } });
+});
+
+app.get("/api/tl/pm/me", (req, res) => {
+  const pmId = getPmFromToken(req);
+  if (!pmId) return res.status(401).json({ error: "Not authenticated" });
+  const db = getDb();
+  const pm = db.prepare("SELECT id, company_name, contact_name, email, phone, warm_intro_template FROM tl_property_managers WHERE id=?").get(pmId);
+  if (!pm) return res.status(404).json({ error: "Not found" });
+  res.json(pm);
+});
+
+// --- PM: Browse Leads (partial info) ---
+app.get("/api/tl/pm/leads", (req, res) => {
+  const pmId = getPmFromToken(req);
+  if (!pmId) return res.status(401).json({ error: "Not authenticated" });
+  const db = getDb();
+
+  const leads = db.prepare(`
+    SELECT id, city, state, bedrooms, bathrooms, property_type, warm_intro, price, status, created_at,
+      CASE WHEN LENGTH(property_address) > 0
+        THEN SUBSTR(property_address, 1, INSTR(property_address || ' ', ' ')) || '***'
+        ELSE '***'
+      END as partial_address
+    FROM tl_leads
+    ORDER BY created_at DESC
+  `).all();
+
+  // Mark which ones are in this PM's cart
+  const cartItems = db.prepare("SELECT lead_id FROM tl_cart WHERE pm_id=?").all(pmId);
+  const cartSet = new Set(cartItems.map(c => c.lead_id));
+
+  leads.forEach(l => {
+    l.in_cart = cartSet.has(l.id);
+  });
+
+  res.json(leads);
+});
+
+// --- PM: Cart ---
+app.get("/api/tl/pm/cart", (req, res) => {
+  const pmId = getPmFromToken(req);
+  if (!pmId) return res.status(401).json({ error: "Not authenticated" });
+  const db = getDb();
+
+  const items = db.prepare(`
+    SELECT c.id as cart_id, c.lead_id, c.added_at,
+      l.city, l.state, l.bedrooms, l.bathrooms, l.property_type, l.warm_intro, l.price, l.status,
+      CASE WHEN LENGTH(l.property_address) > 0
+        THEN SUBSTR(l.property_address, 1, INSTR(l.property_address || ' ', ' ')) || '***'
+        ELSE '***'
+      END as partial_address
+    FROM tl_cart c
+    JOIN tl_leads l ON c.lead_id = l.id
+    WHERE c.pm_id = ?
+    ORDER BY c.added_at DESC
+  `).all(pmId);
+
+  res.json(items);
+});
+
+app.post("/api/tl/pm/cart/add", (req, res) => {
+  const pmId = getPmFromToken(req);
+  if (!pmId) return res.status(401).json({ error: "Not authenticated" });
+  const db = getDb();
+  const { lead_id } = req.body;
+
+  const lead = db.prepare("SELECT status FROM tl_leads WHERE id=?").get(lead_id);
+  if (!lead) return res.status(404).json({ error: "Lead not found" });
+  if (lead.status === "sold") return res.status(400).json({ error: "This lead has already been sold" });
+
+  try {
+    db.prepare("INSERT INTO tl_cart (pm_id, lead_id) VALUES (?, ?)").run(pmId, lead_id);
+    res.json({ ok: true });
+  } catch(e) {
+    res.status(400).json({ error: "Already in cart" });
+  }
+});
+
+app.post("/api/tl/pm/cart/remove", (req, res) => {
+  const pmId = getPmFromToken(req);
+  if (!pmId) return res.status(401).json({ error: "Not authenticated" });
+  const db = getDb();
+  db.prepare("DELETE FROM tl_cart WHERE pm_id=? AND lead_id=?").run(pmId, req.body.lead_id);
+  res.json({ ok: true });
+});
+
+// --- PM: Checkout (Stripe) ---
+app.post("/api/tl/pm/checkout", async (req, res) => {
+  const pmId = getPmFromToken(req);
+  if (!pmId) return res.status(401).json({ error: "Not authenticated" });
+  const db = getDb();
+
+  const cartItems = db.prepare(`
+    SELECT c.lead_id, l.price, l.status, l.city, l.state, l.bedrooms
+    FROM tl_cart c JOIN tl_leads l ON c.lead_id = l.id
+    WHERE c.pm_id = ?
+  `).all(pmId);
+
+  if (cartItems.length === 0) return res.status(400).json({ error: "Cart is empty" });
+
+  // Check none are sold
+  const soldItems = cartItems.filter(i => i.status === "sold");
+  if (soldItems.length > 0) {
+    // Remove sold items from cart
+    for (const si of soldItems) {
+      db.prepare("DELETE FROM tl_cart WHERE pm_id=? AND lead_id=?").run(pmId, si.lead_id);
+    }
+    return res.status(400).json({ error: "Some leads in your cart were just sold. They have been removed. Please review your cart." });
+  }
+
+  const totalAmount = cartItems.reduce((sum, i) => sum + i.price, 0);
+
+  if (!process.env.STRIPE_SECRET_KEY) {
+    // No Stripe configured - manual checkout
+    return res.json({
+      ok: true,
+      mode: "manual",
+      total: totalAmount,
+      items: cartItems.length,
+      message: "Stripe not configured. Contact HostTurn to complete purchase."
+    });
+  }
+
+  try {
+    const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+    const pm = db.prepare("SELECT email, company_name FROM tl_property_managers WHERE id=?").get(pmId);
+
+    const lineItems = cartItems.map(item => ({
+      price_data: {
+        currency: "usd",
+        product_data: {
+          name: `STR Lead - ${item.bedrooms}BR in ${item.city}, ${item.state}`,
+          description: `Lead #${item.lead_id}`
+        },
+        unit_amount: Math.round(item.price * 100)
+      },
+      quantity: 1
+    }));
+
+    const baseUrl = process.env.BASE_URL || `http://localhost:${PORT}`;
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      line_items: lineItems,
+      mode: "payment",
+      customer_email: pm.email,
+      metadata: {
+        pm_id: String(pmId),
+        lead_ids: cartItems.map(i => i.lead_id).join(",")
+      },
+      success_url: `${baseUrl}/trippyleads.html?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/trippyleads.html?checkout=cancel`
+    });
+
+    res.json({ ok: true, mode: "stripe", url: session.url, session_id: session.id });
+  } catch(e) {
+    console.error("[TL] Stripe checkout error:", e.message);
+    res.status(500).json({ error: "Payment processing error. Please try again." });
+  }
+});
+
+// --- Stripe Webhook for TrippyLeads ---
+app.post("/webhook/trippyleads-stripe", express.raw({ type: "application/json" }), async (req, res) => {
+  const db = getDb();
+
+  let event;
+  if (process.env.STRIPE_WEBHOOK_SECRET) {
+    try {
+      const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+      event = stripe.webhooks.constructEvent(req.body, req.headers["stripe-signature"], process.env.STRIPE_WEBHOOK_SECRET);
+    } catch(e) {
+      console.error("[TL] Webhook signature verification failed:", e.message);
+      return res.status(400).send("Webhook Error");
+    }
+  } else {
+    event = req.body;
+  }
+
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object;
+    const pmId = parseInt(session.metadata.pm_id);
+    const leadIds = session.metadata.lead_ids.split(",").map(Number);
+
+    const insertPurchase = db.prepare(`
+      INSERT INTO tl_purchases (pm_id, lead_id, amount, stripe_session_id, stripe_payment_intent)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    const updateLead = db.prepare("UPDATE tl_leads SET status='sold', purchased_by=?, purchased_at=datetime('now'), stripe_payment_id=? WHERE id=? AND status='available'");
+    const removeCart = db.prepare("DELETE FROM tl_cart WHERE lead_id=?");
+
+    const processPurchase = db.transaction(() => {
+      for (const leadId of leadIds) {
+        const lead = db.prepare("SELECT price FROM tl_leads WHERE id=?").get(leadId);
+        if (lead) {
+          updateLead.run(pmId, session.payment_intent || session.id, leadId);
+          insertPurchase.run(pmId, leadId, lead.price, session.id, session.payment_intent || '');
+          removeCart.run(leadId);
+        }
+      }
+    });
+    processPurchase();
+
+    console.log(`[TL] Purchase completed: PM ${pmId} bought leads [${leadIds.join(",")}]`);
+  }
+
+  res.json({ received: true });
+});
+
+// --- PM: Confirm purchase (for redirect back from Stripe) ---
+app.post("/api/tl/pm/confirm-purchase", async (req, res) => {
+  const pmId = getPmFromToken(req);
+  if (!pmId) return res.status(401).json({ error: "Not authenticated" });
+  const db = getDb();
+  const { session_id } = req.body;
+
+  if (!session_id || !process.env.STRIPE_SECRET_KEY) {
+    // Manual confirmation - mark cart items as sold
+    const cartItems = db.prepare("SELECT lead_id FROM tl_cart WHERE pm_id=?").all(pmId);
+    const insertPurchase = db.prepare("INSERT INTO tl_purchases (pm_id, lead_id, amount) VALUES (?, ?, ?)");
+    const updateLead = db.prepare("UPDATE tl_leads SET status='sold', purchased_by=?, purchased_at=datetime('now') WHERE id=? AND status='available'");
+
+    const process = db.transaction(() => {
+      for (const item of cartItems) {
+        const lead = db.prepare("SELECT price FROM tl_leads WHERE id=?").get(item.lead_id);
+        if (lead) {
+          updateLead.run(pmId, item.lead_id);
+          insertPurchase.run(pmId, item.lead_id, lead.price);
+        }
+      }
+      db.prepare("DELETE FROM tl_cart WHERE pm_id=?").run(pmId);
+    });
+    process();
+    return res.json({ ok: true });
+  }
+
+  // Verify Stripe session
+  try {
+    const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+    const session = await stripe.checkout.sessions.retrieve(session_id);
+    if (session.payment_status === "paid") {
+      // Webhook should have handled it, but double-check
+      const leadIds = session.metadata.lead_ids.split(",").map(Number);
+      for (const leadId of leadIds) {
+        const lead = db.prepare("SELECT status FROM tl_leads WHERE id=?").get(leadId);
+        if (lead && lead.status === "available") {
+          db.prepare("UPDATE tl_leads SET status='sold', purchased_by=?, purchased_at=datetime('now'), stripe_payment_id=? WHERE id=?").run(pmId, session.payment_intent, leadId);
+          db.prepare("INSERT OR IGNORE INTO tl_purchases (pm_id, lead_id, amount, stripe_session_id, stripe_payment_intent) VALUES (?, ?, ?, ?, ?)").run(pmId, leadId, 0, session.id, session.payment_intent);
+        }
+      }
+      db.prepare("DELETE FROM tl_cart WHERE pm_id=?").run(pmId);
+      res.json({ ok: true });
+    } else {
+      res.status(400).json({ error: "Payment not completed" });
+    }
+  } catch(e) {
+    res.status(500).json({ error: "Could not verify payment" });
+  }
+});
+
+// --- PM: Purchased Leads (full details) ---
+app.get("/api/tl/pm/purchased", (req, res) => {
+  const pmId = getPmFromToken(req);
+  if (!pmId) return res.status(401).json({ error: "Not authenticated" });
+  const db = getDb();
+
+  const purchased = db.prepare(`
+    SELECT pu.id as purchase_id, pu.purchased_at, pu.amount, pu.warm_intro_requested, pu.warm_intro_sent, pu.warm_intro_message,
+      l.owner_name, l.owner_email, l.owner_phone, l.property_address, l.city, l.state, l.zip,
+      l.bedrooms, l.bathrooms, l.property_type, l.listing_url, l.notes, l.warm_intro
+    FROM tl_purchases pu
+    JOIN tl_leads l ON pu.lead_id = l.id
+    WHERE pu.pm_id = ?
+    ORDER BY pu.purchased_at DESC
+  `).all(pmId);
+
+  res.json(purchased);
+});
+
+// --- PM: Request Warm Intro ---
+app.post("/api/tl/pm/warm-intro", (req, res) => {
+  const pmId = getPmFromToken(req);
+  if (!pmId) return res.status(401).json({ error: "Not authenticated" });
+  const db = getDb();
+  const { purchase_id, message } = req.body;
+
+  const purchase = db.prepare("SELECT * FROM tl_purchases WHERE id=? AND pm_id=?").get(purchase_id, pmId);
+  if (!purchase) return res.status(404).json({ error: "Purchase not found" });
+
+  db.prepare("UPDATE tl_purchases SET warm_intro_requested=1, warm_intro_message=? WHERE id=?").run(message || '', purchase_id);
+  res.json({ ok: true });
+});
+
+// --- PM: Save warm intro template ---
+app.post("/api/tl/pm/warm-intro-template", (req, res) => {
+  const pmId = getPmFromToken(req);
+  if (!pmId) return res.status(401).json({ error: "Not authenticated" });
+  const db = getDb();
+  db.prepare("UPDATE tl_property_managers SET warm_intro_template=?, updated_at=datetime('now') WHERE id=?").run(req.body.template || '', pmId);
+  res.json({ ok: true });
+});
+
+// --- Admin: Dashboard Stats ---
+app.get("/api/tl/admin/stats", (req, res) => {
+  if (!isAdmin(req)) return res.status(401).json({ error: "Unauthorized" });
+  const db = getDb();
+  const totalLeads = db.prepare("SELECT COUNT(*) as c FROM tl_leads").get().c;
+  const availableLeads = db.prepare("SELECT COUNT(*) as c FROM tl_leads WHERE status='available'").get().c;
+  const soldLeads = db.prepare("SELECT COUNT(*) as c FROM tl_leads WHERE status='sold'").get().c;
+  const totalRevenue = db.prepare("SELECT COALESCE(SUM(amount),0) as t FROM tl_purchases").get().t;
+  const totalPMs = db.prepare("SELECT COUNT(*) as c FROM tl_property_managers").get().c;
+  const pendingIntros = db.prepare("SELECT COUNT(*) as c FROM tl_purchases WHERE warm_intro_requested=1 AND warm_intro_sent=0").get().c;
+  res.json({ totalLeads, availableLeads, soldLeads, totalRevenue, totalPMs, pendingIntros });
+});
+
+// ═══════════════════════════════════════════════════════
 // START
 // ═══════════════════════════════════════════════════════
 
