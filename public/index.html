@@ -348,6 +348,17 @@
         </div>
         <input type="hidden" id="home-edit-id" value="">
       </div>
+      <!-- Notes Section (shows when editing a home) -->
+      <div id="home-notes-section" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:24px;">
+        <h3 style="margin:0 0 16px 0;font-size:16px;">&#x1F4CB; Notes for <span id="home-notes-title">Home</span></h3>
+        <div style="display:flex;gap:8px;margin-bottom:16px;">
+          <input type="text" id="home-note-input" placeholder="Type a note..." style="flex:1;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;font-size:14px;" onkeydown="if(event.key==='Enter')addPropertyNote()">
+          <button class="btn" onclick="addPropertyNote()" style="padding:10px 20px;font-size:14px;white-space:nowrap;">&#10133; Add Note</button>
+        </div>
+        <div id="home-notes-list" style="max-height:300px;overflow-y:auto;">
+          <div style="text-align:center;color:var(--text2);padding:20px;font-size:13px;">No notes yet.</div>
+        </div>
+      </div>
       <!-- Homes Table -->
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
@@ -366,6 +377,7 @@
                 <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('baths')">Baths &#8645;</th>
                 <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('rate')">Std Rate &#8645;</th>
                 <th style="padding:10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sortHomes('deep_clean_rate')">Deep Clean &#8645;</th>
+                <th style="padding:10px;border-bottom:1px solid var(--border);text-align:center;">Notes</th>
                 <th style="padding:10px;border-bottom:1px solid var(--border);">Actions</th>
               </tr>
             </thead>
@@ -1059,14 +1071,19 @@
     var homesSortCol = 'region';
     var homesSortDir = 1;
     
+    var homeNoteCounts = {};
     async function loadHomes() {
       try {
         var r = await fetch('/api/properties/all');
         allHomes = await r.json();
         document.getElementById('homes-count').textContent = allHomes.length;
+        try {
+          var nc = await fetch('/api/properties/notes-counts');
+          homeNoteCounts = await nc.json();
+        } catch(e2) { homeNoteCounts = {}; }
         renderHomes();
       } catch(e) {
-        document.getElementById('homes-body').innerHTML = '<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--text2)">Error: ' + e.message + '</td></tr>';
+        document.getElementById('homes-body').innerHTML = '<tr><td colspan="10" style="padding:20px;text-align:center;color:var(--text2)">Error: ' + e.message + '</td></tr>';
       }
     }
     
@@ -1103,7 +1120,7 @@
       });
       
       if (!homes.length) {
-        document.getElementById('homes-body').innerHTML = '<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--text2)">No homes found.</td></tr>';
+        document.getElementById('homes-body').innerHTML = '<tr><td colspan="10" style="padding:20px;text-align:center;color:var(--text2)">No homes found.</td></tr>';
         return;
       }
       
@@ -1131,6 +1148,7 @@
           '<td style="padding:10px;text-align:center;">' + (h.baths || '-') + '</td>' +
           '<td style="padding:10px;font-family:JetBrains Mono,monospace;font-weight:600;color:var(--accent);">' + rate + '</td>' +
           '<td style="padding:10px;font-family:JetBrains Mono,monospace;color:var(--blue);">' + deep + '</td>' +
+          '<td style="padding:10px;text-align:center;">' + (homeNoteCounts[h.id] ? '<button onclick="editHome(\'' + h.id + '\')" style="background:rgba(59,130,246,0.15);color:var(--blue);border:none;cursor:pointer;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;" title="View notes">' + homeNoteCounts[h.id] + '</button>' : '<span style="color:var(--text2);font-size:11px;">-</span>') + '</td>' +
           '<td style="padding:10px;"><button onclick="editHome(\'' + h.id + '\')" style="background:none;border:none;cursor:pointer;font-size:14px;" title="Edit">&#9999;&#65039;</button></td>' +
         '</tr>';
       }).join('');
@@ -1156,6 +1174,9 @@
       document.getElementById('homes-form-title').textContent = '\u{270F}\u{FE0F} Edit: ' + (h.name || 'Home');
       document.getElementById('home-save-btn').textContent = '\u{1F4BE} Save Changes';
       document.getElementById('home-cancel-btn').style.display = 'inline-flex';
+      document.getElementById('home-notes-section').style.display = 'block';
+      document.getElementById('home-notes-title').textContent = h.name || 'Home';
+      loadPropertyNotes(h.id);
       document.getElementById('homes-form-title').scrollIntoView({behavior:'smooth'});
     }
     
@@ -1177,6 +1198,8 @@
       document.getElementById('homes-form-title').textContent = '\u{2795} Add New Home';
       document.getElementById('home-save-btn').textContent = '\u{1F4BE} Add Home';
       document.getElementById('home-cancel-btn').style.display = 'none';
+      document.getElementById('home-notes-section').style.display = 'none';
+      document.getElementById('home-note-input').value = '';
     }
     
     async function saveHome() {
@@ -1208,6 +1231,69 @@
       
       cancelEditHome();
       loadHomes();
+    }
+
+    async function loadPropertyNotes(propertyId) {
+      var container = document.getElementById('home-notes-list');
+      container.innerHTML = '<div style="text-align:center;color:var(--text2);padding:12px;font-size:13px;">Loading notes...</div>';
+      try {
+        var r = await fetch('/api/properties/' + propertyId + '/notes');
+        var notes = await r.json();
+        if (!notes.length) {
+          container.innerHTML = '<div style="text-align:center;color:var(--text2);padding:20px;font-size:13px;">No notes yet. Add your first note above.</div>';
+          return;
+        }
+        container.innerHTML = notes.map(function(n) {
+          var d = new Date(n.created_at + 'Z');
+          var dateStr = d.toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'});
+          var timeStr = d.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit'});
+          return '<div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">' +
+            '<div style="flex:1;">' +
+              '<div style="font-size:14px;color:var(--text);line-height:1.5;">' + escapeHtml(n.note) + '</div>' +
+              '<div style="font-size:11px;color:var(--text2);margin-top:4px;">' + dateStr + ' at ' + timeStr + '</div>' +
+            '</div>' +
+            '<button onclick="deletePropertyNote(' + n.id + ')" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:12px;padding:4px 8px;border-radius:4px;flex-shrink:0;" title="Delete note" onmouseover="this.style.color=\'#ef4444\'" onmouseout="this.style.color=\'var(--text2)\'">&#10060;</button>' +
+          '</div>';
+        }).join('');
+      } catch(e) {
+        container.innerHTML = '<div style="text-align:center;color:#ef4444;padding:12px;font-size:13px;">Error loading notes: ' + e.message + '</div>';
+      }
+    }
+
+    async function addPropertyNote() {
+      var propertyId = document.getElementById('home-edit-id').value;
+      if (!propertyId) return;
+      var input = document.getElementById('home-note-input');
+      var note = input.value.trim();
+      if (!note) { input.focus(); return; }
+      try {
+        await fetch('/api/properties/' + propertyId + '/notes', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ note: note })
+        });
+        input.value = '';
+        loadPropertyNotes(propertyId);
+      } catch(e) {
+        alert('Error adding note: ' + e.message);
+      }
+    }
+
+    async function deletePropertyNote(noteId) {
+      var propertyId = document.getElementById('home-edit-id').value;
+      if (!propertyId || !confirm('Delete this note?')) return;
+      try {
+        await fetch('/api/properties/' + propertyId + '/notes/' + noteId, { method: 'DELETE' });
+        loadPropertyNotes(propertyId);
+      } catch(e) {
+        alert('Error deleting note: ' + e.message);
+      }
+    }
+
+    function escapeHtml(str) {
+      var div = document.createElement('div');
+      div.appendChild(document.createTextNode(str));
+      return div.innerHTML;
     }
   </script>
 </body>
