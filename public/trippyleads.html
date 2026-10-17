@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TrippyLeads - STR Owner Lead Marketplace</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #242836;
+      --surface3: #2e3345;
+      --border: #353a4a;
+      --text: #e4e6ef;
+      --text2: #9499ae;
+      --blue: #3b82f6;
+      --green: #22c55e;
+      --red: #ef4444;
+      --orange: #f59e0b;
+      --purple: #a855f7;
+      --gold: #fbbf24;
+      --teal: #14b8a6;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+
+    /* Header */
+    .tl-header { background:linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4c1d95 100%); padding:20px 32px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border); }
+    .tl-logo { display:flex; align-items:center; gap:12px; }
+    .tl-logo h1 { font-size:24px; font-weight:800; background:linear-gradient(135deg, #a78bfa, #818cf8, #6366f1); -webkit-background-clip:text; -webkit-text-fill-color:transparent; letter-spacing:-0.5px; }
+    .tl-logo .subtitle { font-size:12px; color:rgba(255,255,255,0.6); margin-top:2px; }
+    .tl-header-actions { display:flex; gap:10px; align-items:center; }
+    .tl-header .user-badge { background:rgba(255,255,255,0.1); padding:6px 14px; border-radius:20px; font-size:13px; color:rgba(255,255,255,0.8); }
+
+    /* Buttons */
+    .btn { padding:8px 18px; border:none; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; transition:all 0.2s; display:inline-flex; align-items:center; gap:6px; }
+    .btn-primary { background:var(--blue); color:#fff; }
+    .btn-primary:hover { background:#2563eb; }
+    .btn-purple { background:var(--purple); color:#fff; }
+    .btn-purple:hover { background:#9333ea; }
+    .btn-green { background:var(--green); color:#fff; }
+    .btn-green:hover { background:#16a34a; }
+    .btn-red { background:rgba(239,68,68,0.15); color:var(--red); }
+    .btn-red:hover { background:rgba(239,68,68,0.25); }
+    .btn-outline { background:transparent; border:1px solid var(--border); color:var(--text); }
+    .btn-outline:hover { background:var(--surface2); }
+    .btn-gold { background:linear-gradient(135deg, #f59e0b, #d97706); color:#000; font-weight:700; }
+    .btn-gold:hover { background:linear-gradient(135deg, #fbbf24, #f59e0b); }
+    .btn-sm { padding:5px 12px; font-size:12px; }
+
+    /* Layout */
+    .tl-container { max-width:1200px; margin:0 auto; padding:24px 20px; }
+
+    /* Stats */
+    .stats-row { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:14px; margin-bottom:24px; }
+    .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; }
+    .stat-card .stat-label { font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+    .stat-card .stat-value { font-size:28px; font-weight:700; }
+    .stat-card .stat-value.blue { color:var(--blue); }
+    .stat-card .stat-value.green { color:var(--green); }
+    .stat-card .stat-value.purple { color:var(--purple); }
+    .stat-card .stat-value.gold { color:var(--gold); }
+    .stat-card .stat-value.teal { color:var(--teal); }
+
+    /* Cards */
+    .card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:20px; }
+    .card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+    .card-header h2 { font-size:18px; font-weight:700; }
+
+    /* Table */
+    .tl-table { width:100%; border-collapse:collapse; }
+    .tl-table th { text-align:left; padding:10px 14px; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--text2); border-bottom:1px solid var(--border); }
+    .tl-table td { padding:10px 14px; border-bottom:1px solid var(--border); font-size:13px; }
+    .tl-table tr:hover { background:var(--surface2); }
+
+    /* Badges */
+    .badge { display:inline-block; padding:3px 10px; border-radius:12px; font-size:11px; font-weight:600; }
+    .badge-available { background:rgba(34,197,94,0.15); color:var(--green); }
+    .badge-sold { background:rgba(239,68,68,0.15); color:var(--red); }
+    .badge-warm { background:rgba(251,191,36,0.15); color:var(--gold); }
+    .badge-cart { background:rgba(168,85,247,0.15); color:var(--purple); }
+
+    /* Lead cards (PM view) */
+    .leads-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:16px; }
+    .lead-card { background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:18px; transition:all 0.2s; position:relative; }
+    .lead-card:hover { border-color:var(--purple); transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,0,0,0.3); }
+    .lead-card.sold { opacity:0.5; pointer-events:none; }
+    .lead-card .lead-price { font-size:24px; font-weight:800; color:var(--green); }
+    .lead-card .lead-location { font-size:14px; color:var(--text); margin:8px 0; }
+    .lead-card .lead-details { font-size:12px; color:var(--text2); margin:6px 0; }
+    .lead-card .lead-actions { margin-top:14px; display:flex; gap:8px; }
+    .lead-card .sold-banner { position:absolute; top:12px; right:12px; background:var(--red); color:#fff; padding:4px 12px; border-radius:8px; font-size:11px; font-weight:700; text-transform:uppercase; }
+    .lead-card .warm-badge { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:12px; font-size:11px; font-weight:600; background:rgba(251,191,36,0.15); color:var(--gold); margin-top:8px; }
+
+    /* Modal */
+    .modal-overlay { display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.7); z-index:1000; justify-content:center; align-items:center; }
+    .modal-overlay.active { display:flex; }
+    .modal { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:28px; max-width:560px; width:90%; max-height:85vh; overflow-y:auto; }
+    .modal h3 { font-size:18px; font-weight:700; margin-bottom:16px; }
+
+    /* Forms */
+    .form-group { margin-bottom:14px; }
+    .form-group label { display:block; font-size:12px; color:var(--text2); margin-bottom:5px; font-weight:600; }
+    .form-group input, .form-group select, .form-group textarea { width:100%; padding:10px 14px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:14px; font-family:inherit; }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline:none; border-color:var(--purple); }
+    .form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .form-row-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+    .form-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:20px; }
+
+    /* Login */
+    .login-container { max-width:400px; margin:80px auto; }
+    .login-container .card { text-align:center; }
+    .login-container h2 { margin-bottom:8px; }
+    .login-container .login-subtitle { color:var(--text2); font-size:14px; margin-bottom:24px; }
+
+    /* Tabs */
+    .tab-bar { display:flex; gap:4px; margin-bottom:20px; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:4px; }
+    .tab-btn { padding:8px 18px; border:none; background:transparent; color:var(--text2); font-size:13px; font-weight:600; border-radius:8px; cursor:pointer; transition:all 0.2s; }
+    .tab-btn.active { background:var(--purple); color:#fff; }
+    .tab-btn:hover:not(.active) { background:var(--surface2); color:var(--text); }
+
+    /* Cart sidebar */
+    .cart-floating { position:fixed; bottom:24px; right:24px; z-index:100; }
+    .cart-btn { background:linear-gradient(135deg, #a855f7, #6366f1); color:#fff; padding:14px 22px; border-radius:50px; border:none; cursor:pointer; font-size:14px; font-weight:700; box-shadow:0 8px 30px rgba(168,85,247,0.4); display:flex; align-items:center; gap:8px; transition:all 0.2s; }
+    .cart-btn:hover { transform:scale(1.05); box-shadow:0 12px 40px rgba(168,85,247,0.5); }
+    .cart-count { background:#fff; color:var(--purple); width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; }
+
+    /* Purchased lead (full details) */
+    .purchased-card { background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:16px; }
+    .purchased-card .owner-info { background:rgba(34,197,94,0.08); border:1px solid rgba(34,197,94,0.2); border-radius:10px; padding:14px; margin:12px 0; }
+    .purchased-card .owner-info h4 { color:var(--green); font-size:14px; margin-bottom:8px; }
+    .purchased-card .owner-info p { font-size:13px; color:var(--text); margin:4px 0; }
+
+    /* Responsive */
+    @media (max-width:768px) {
+      .tl-header { padding:14px 16px; flex-direction:column; gap:12px; }
+      .tl-container { padding:16px 12px; }
+      .form-row, .form-row-3 { grid-template-columns:1fr; }
+      .leads-grid { grid-template-columns:1fr; }
+      .stats-row { grid-template-columns:repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<div class="tl-header">
+  <div class="tl-logo">
+    <div>
+      <h1>TrippyLeads</h1>
+      <div class="subtitle">STR Owner Lead Marketplace by HostTurn</div>
+    </div>
+  </div>
+  <div class="tl-header-actions" id="header-actions"></div>
+</div>
+
+<!-- Login Screen -->
+<div id="login-screen" class="login-container" style="display:none;">
+  <div class="card">
+    <h2>Property Manager Login</h2>
+    <div class="login-subtitle">Access the STR lead marketplace</div>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="login-email" placeholder="you@company.com">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="login-password" placeholder="Password" onkeydown="if(event.key==='Enter')pmLogin()">
+    </div>
+    <div id="login-error" style="color:var(--red);font-size:13px;margin-bottom:12px;display:none;"></div>
+    <button class="btn btn-purple" onclick="pmLogin()" style="width:100%;justify-content:center;margin-top:8px;">Sign In</button>
+    <div style="margin-top:16px;font-size:12px;color:var(--text2);">
+      <a href="/" style="color:var(--blue);text-decoration:none;">&#8592; Back to HostTurn Ops</a>
+    </div>
+  </div>
+</div>
+
+<!-- Admin Dashboard -->
+<div id="admin-screen" style="display:none;">
+  <div class="tl-container">
+    <div class="stats-row" id="admin-stats"></div>
+
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="showAdminTab('leads')">Leads</button>
+      <button class="tab-btn" onclick="showAdminTab('pms')">Property Managers</button>
+      <button class="tab-btn" onclick="showAdminTab('purchases')">Sales</button>
+    </div>
+
+    <!-- Leads Tab -->
+    <div id="admin-tab-leads" class="card">
+      <div class="card-header">
+        <h2>Lead Pipeline</h2>
+        <button class="btn btn-purple" onclick="openAddLead()">+ Add Lead</button>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="tl-table" id="admin-leads-table">
+          <thead>
+            <tr>
+              <th>Owner</th>
+              <th>Property</th>
+              <th>Location</th>
+              <th>Beds</th>
+              <th>Price</th>
+              <th>Warm Intro</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="admin-leads-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- PMs Tab -->
+    <div id="admin-tab-pms" class="card" style="display:none;">
+      <div class="card-header">
+        <h2>Property Managers</h2>
+        <button class="btn btn-purple" onclick="openAddPM()">+ Add PM</button>
+      </div>
+      <table class="tl-table">
+        <thead>
+          <tr>
+            <th>Company</th>
+            <th>Contact</th>
+            <th>Email</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="admin-pms-body"></tbody>
+      </table>
+    </div>
+
+    <!-- Sales Tab -->
+    <div id="admin-tab-purchases" class="card" style="display:none;">
+      <div class="card-header">
+        <h2>Sales History</h2>
+      </div>
+      <table class="tl-table">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Buyer</th>
+            <th>Lead</th>
+            <th>Location</th>
+            <th>Amount</th>
+            <th>Warm Intro</th>
+          </tr>
+        </thead>
+        <tbody id="admin-purchases-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- PM Dashboard -->
+<div id="pm-screen" style="display:none;">
+  <div class="tl-container">
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="showPmTab('browse')">Browse Leads</button>
+      <button class="tab-btn" onclick="showPmTab('purchased')">My Purchased Leads</button>
+      <button class="tab-btn" onclick="showPmTab('settings')">Settings</button>
+    </div>
+
+    <!-- Browse -->
+    <div id="pm-tab-browse">
+      <div style="display:flex;gap:12px;margin-bottom:16px;align-items:center;flex-wrap:wrap;">
+        <input type="text" id="pm-search" placeholder="Search leads..." style="flex:1;min-width:200px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;" oninput="renderPmLeads()">
+        <select id="pm-filter-beds" style="padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;" onchange="renderPmLeads()">
+          <option value="">All Bedrooms</option>
+          <option value="0">Studio</option>
+          <option value="1">1 BR</option>
+          <option value="2">2 BR</option>
+          <option value="3">3 BR</option>
+          <option value="4">4 BR</option>
+          <option value="5">5+ BR</option>
+        </select>
+        <select id="pm-filter-status" style="padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;" onchange="renderPmLeads()">
+          <option value="available">Available</option>
+          <option value="">All</option>
+          <option value="sold">Sold</option>
+        </select>
+      </div>
+      <div class="leads-grid" id="pm-leads-grid"></div>
+    </div>
+
+    <!-- Purchased -->
+    <div id="pm-tab-purchased" style="display:none;">
+      <div id="pm-purchased-list"></div>
+    </div>
+
+    <!-- Settings -->
+    <div id="pm-tab-settings" style="display:none;">
+      <div class="card">
+        <h2 style="margin-bottom:16px;">Warm Introduction Template</h2>
+        <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">Write a paragraph about your company that we will include in the warm introduction email to the property owner. This saves you time on each lead.</p>
+        <div class="form-group">
+          <textarea id="pm-warm-template" rows="6" placeholder="Hi, I'm [Name] from [Company]. We manage short-term rental properties in the [area] region and would love to discuss managing your property..."></textarea>
+        </div>
+        <button class="btn btn-purple" onclick="savePmTemplate()">Save Template</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Cart -->
+  <div class="cart-floating" id="cart-floating" style="display:none;">
+    <button class="cart-btn" onclick="openCart()">
+      &#x1F6D2; Cart <span class="cart-count" id="cart-count">0</span>
+    </button>
+  </div>
+</div>
+
+<!-- Add/Edit Lead Modal -->
+<div class="modal-overlay" id="lead-modal">
+  <div class="modal">
+    <h3 id="lead-modal-title">Add New Lead</h3>
+    <input type="hidden" id="lead-edit-id">
+    <div class="form-row">
+      <div class="form-group">
+        <label>Owner Name *</label>
+        <input type="text" id="lead-owner-name" placeholder="John Smith">
+      </div>
+      <div class="form-group">
+        <label>Owner Email</label>
+        <input type="email" id="lead-owner-email" placeholder="john@email.com">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Owner Phone</label>
+      <input type="tel" id="lead-owner-phone" placeholder="(555) 123-4567">
+    </div>
+    <div class="form-group">
+      <label>Property Address *</label>
+      <input type="text" id="lead-address" placeholder="123 Mountain View Rd">
+    </div>
+    <div class="form-row-3">
+      <div class="form-group">
+        <label>City</label>
+        <input type="text" id="lead-city" placeholder="Stowe">
+      </div>
+      <div class="form-group">
+        <label>State</label>
+        <input type="text" id="lead-state" placeholder="VT">
+      </div>
+      <div class="form-group">
+        <label>Zip</label>
+        <input type="text" id="lead-zip" placeholder="05672">
+      </div>
+    </div>
+    <div class="form-row-3">
+      <div class="form-group">
+        <label>Bedrooms</label>
+        <select id="lead-bedrooms">
+          <option value="0">Studio</option>
+          <option value="1" selected>1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+          <option value="6">6+</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Bathrooms</label>
+        <input type="number" id="lead-bathrooms" value="1" min="0.5" step="0.5">
+      </div>
+      <div class="form-group">
+        <label>Property Type</label>
+        <select id="lead-type">
+          <option value="entire_home">Entire Home</option>
+          <option value="condo">Condo/Apartment</option>
+          <option value="townhouse">Townhouse</option>
+          <option value="cabin">Cabin</option>
+          <option value="other">Other</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Listing URL (Airbnb, VRBO, etc.)</label>
+      <input type="url" id="lead-listing-url" placeholder="https://airbnb.com/rooms/...">
+    </div>
+    <div class="form-group">
+      <label>Notes</label>
+      <textarea id="lead-notes" rows="3" placeholder="Any additional details about the lead..."></textarea>
+    </div>
+    <div class="form-group" style="display:flex;align-items:center;gap:10px;">
+      <input type="checkbox" id="lead-warm-intro" style="width:auto;">
+      <label for="lead-warm-intro" style="margin:0;font-size:14px;color:var(--text);cursor:pointer;">Warm Introduction Available</label>
+    </div>
+    <div id="lead-price-preview" style="background:var(--surface3);border-radius:8px;padding:12px;margin-top:8px;font-size:14px;display:flex;justify-content:space-between;align-items:center;">
+      <span style="color:var(--text2);">Lead Price:</span>
+      <span style="font-size:20px;font-weight:700;color:var(--green);" id="lead-price-display">$250</span>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-outline" onclick="closeModal('lead-modal')">Cancel</button>
+      <button class="btn btn-purple" onclick="saveLead()">Save Lead</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add PM Modal -->
+<div class="modal-overlay" id="pm-modal">
+  <div class="modal">
+    <h3>Add Property Manager</h3>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Company Name *</label>
+        <input type="text" id="pm-company" placeholder="Acme Property Management">
+      </div>
+      <div class="form-group">
+        <label>Contact Name *</label>
+        <input type="text" id="pm-contact" placeholder="Jane Doe">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Email *</label>
+        <input type="email" id="pm-email" placeholder="jane@acmepm.com">
+      </div>
+      <div class="form-group">
+        <label>Phone</label>
+        <input type="tel" id="pm-phone" placeholder="(555) 123-4567">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Password *</label>
+      <input type="password" id="pm-password" placeholder="Set a password for this PM">
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-outline" onclick="closeModal('pm-modal')">Cancel</button>
+      <button class="btn btn-purple" onclick="savePM()">Create Account</button>
+    </div>
+  </div>
+</div>
+
+<!-- Cart Modal -->
+<div class="modal-overlay" id="cart-modal">
+  <div class="modal" style="max-width:620px;">
+    <h3>Your Cart</h3>
+    <div id="cart-items"></div>
+    <div id="cart-total" style="display:flex;justify-content:space-between;align-items:center;padding:16px 0;border-top:1px solid var(--border);margin-top:12px;">
+      <span style="font-size:16px;font-weight:600;">Total:</span>
+      <span id="cart-total-amount" style="font-size:24px;font-weight:800;color:var(--green);">$0</span>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-outline" onclick="closeModal('cart-modal')">Continue Browsing</button>
+      <button class="btn btn-gold" onclick="checkout()" id="checkout-btn">Proceed to Checkout</button>
+    </div>
+  </div>
+</div>
+
+<!-- Warm Intro Modal -->
+<div class="modal-overlay" id="warm-intro-modal">
+  <div class="modal">
+    <h3>Request Warm Introduction</h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">We will send an email to the property owner introducing you. You can customize the message below or use your saved template.</p>
+    <div class="form-group">
+      <label>Your Introduction Message</label>
+      <textarea id="warm-intro-message" rows="6" placeholder="Write your introduction message..."></textarea>
+    </div>
+    <input type="hidden" id="warm-intro-purchase-id">
+    <div class="form-actions">
+      <button class="btn btn-outline" onclick="closeModal('warm-intro-modal')">Cancel</button>
+      <button class="btn btn-gold" onclick="sendWarmIntro()">Send Request</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ═══════════════════════════════════════════════════════
+  // STATE
+  // ═══════════════════════════════════════════════════════
+  var ADMIN_KEY = 'hostturn2024';
+  var pmToken = localStorage.getItem('tl_pm_token') || '';
+  var pmData = null;
+  var allLeads = [];
+  var allPMs = [];
+  var allPurchases = [];
+  var pmLeads = [];
+  var pmCart = [];
+  var pmPurchased = [];
+  var isAdminMode = false;
+
+  // ═══════════════════════════════════════════════════════
+  // INIT
+  // ═══════════════════════════════════════════════════════
+  (function init() {
+    var params = new URLSearchParams(window.location.search);
+
+    if (params.get('admin') !== null) {
+      isAdminMode = true;
+      showScreen('admin');
+      loadAdminData();
+      return;
+    }
+
+    // Check for Stripe redirect
+    if (params.get('checkout') === 'success' && pmToken) {
+      confirmPurchase(params.get('session_id'));
+    }
+
+    if (pmToken) {
+      verifyPmSession();
+    } else {
+      showScreen('login');
+    }
+  })();
+
+  function showScreen(name) {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('admin-screen').style.display = 'none';
+    document.getElementById('pm-screen').style.display = 'none';
+
+    if (name === 'login') {
+      document.getElementById('login-screen').style.display = 'block';
+      document.getElementById('header-actions').innerHTML = '<a href="?admin" style="color:rgba(255,255,255,0.4);font-size:12px;text-decoration:none;">Admin</a>';
+    } else if (name === 'admin') {
+      document.getElementById('admin-screen').style.display = 'block';
+      document.getElementById('header-actions').innerHTML = '<span class="user-badge">Admin</span> <button class="btn btn-outline btn-sm" onclick="location.href=\'/trippyleads.html\'" style="color:rgba(255,255,255,0.7);">PM View</button> <a href="/" class="btn btn-outline btn-sm" style="color:rgba(255,255,255,0.7);text-decoration:none;">Ops Dashboard</a>';
+    } else if (name === 'pm') {
+      document.getElementById('pm-screen').style.display = 'block';
+      var name = pmData ? pmData.company_name || pmData.contact_name : '';
+      document.getElementById('header-actions').innerHTML = '<span class="user-badge">' + escapeHtml(name) + '</span> <button class="btn btn-outline btn-sm" onclick="pmLogout()" style="color:rgba(255,255,255,0.7);">Sign Out</button>';
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // ADMIN
+  // ═══════════════════════════════════════════════════════
+  function adminFetch(url, opts) {
+    opts = opts || {};
+    opts.headers = opts.headers || {};
+    opts.headers['x-admin-key'] = ADMIN_KEY;
+    return fetch(url, opts);
+  }
+
+  async function loadAdminData() {
+    try {
+      var [statsR, leadsR, pmsR, purchasesR] = await Promise.all([
+        adminFetch('/api/tl/admin/stats'),
+        adminFetch('/api/tl/admin/leads'),
+        adminFetch('/api/tl/admin/pms'),
+        adminFetch('/api/tl/admin/purchases')
+      ]);
+      var stats = await statsR.json();
+      allLeads = await leadsR.json();
+      allPMs = await pmsR.json();
+      allPurchases = await purchasesR.json();
+
+      renderAdminStats(stats);
+      renderAdminLeads();
+      renderAdminPMs();
+      renderAdminPurchases();
+    } catch(e) {
+      console.error('Failed to load admin data:', e);
+    }
+  }
+
+  function renderAdminStats(s) {
+    document.getElementById('admin-stats').innerHTML =
+      '<div class="stat-card"><div class="stat-label">Total Leads</div><div class="stat-value blue">' + s.totalLeads + '</div></div>' +
+      '<div class="stat-card"><div class="stat-label">Available</div><div class="stat-value green">' + s.availableLeads + '</div></div>' +
+      '<div class="stat-card"><div class="stat-label">Sold</div><div class="stat-value purple">' + s.soldLeads + '</div></div>' +
+      '<div class="stat-card"><div class="stat-label">Revenue</div><div class="stat-value gold">$' + s.totalRevenue.toLocaleString() + '</div></div>' +
+      '<div class="stat-card"><div class="stat-label">PMs</div><div class="stat-value teal">' + s.totalPMs + '</div></div>' +
+      '<div class="stat-card"><div class="stat-label">Pending Intros</div><div class="stat-value" style="color:var(--orange)">' + s.pendingIntros + '</div></div>';
+  }
+
+  function renderAdminLeads() {
+    var body = document.getElementById('admin-leads-body');
+    if (allLeads.length === 0) {
+      body.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:30px;color:var(--text2);">No leads yet. Click "+ Add Lead" to get started.</td></tr>';
+      return;
+    }
+    body.innerHTML = allLeads.map(function(l) {
+      return '<tr>' +
+        '<td><strong>' + escapeHtml(l.owner_name) + '</strong><br><span style="font-size:11px;color:var(--text2);">' + escapeHtml(l.owner_email || '') + '</span></td>' +
+        '<td style="max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escapeHtml(l.property_address) + '</td>' +
+        '<td>' + escapeHtml(l.city || '') + ', ' + escapeHtml(l.state || '') + '</td>' +
+        '<td>' + l.bedrooms + 'BR / ' + l.bathrooms + 'BA</td>' +
+        '<td style="font-weight:700;color:var(--green);">$' + l.price + '</td>' +
+        '<td>' + (l.warm_intro ? '<span class="badge badge-warm">Warm</span>' : '-') + '</td>' +
+        '<td>' + (l.status === 'sold' ? '<span class="badge badge-sold">Sold</span><br><span style="font-size:11px;color:var(--text2);">' + escapeHtml(l.buyer_company || '') + '</span>' : '<span class="badge badge-available">Available</span>') + '</td>' +
+        '<td>' +
+          (l.status !== 'sold' ? '<button class="btn btn-sm btn-outline" onclick="editLead(' + l.id + ')">Edit</button> ' : '') +
+          (l.status !== 'sold' ? '<button class="btn btn-sm btn-red" onclick="deleteLead(' + l.id + ')">Del</button>' : '') +
+        '</td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function renderAdminPMs() {
+    var body = document.getElementById('admin-pms-body');
+    if (allPMs.length === 0) {
+      body.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:30px;color:var(--text2);">No property managers yet.</td></tr>';
+      return;
+    }
+    body.innerHTML = allPMs.map(function(pm) {
+      return '<tr>' +
+        '<td><strong>' + escapeHtml(pm.company_name) + '</strong></td>' +
+        '<td>' + escapeHtml(pm.contact_name) + '</td>' +
+        '<td>' + escapeHtml(pm.email) + '</td>' +
+        '<td>' + (pm.is_active ? '<span class="badge badge-available">Active</span>' : '<span class="badge badge-sold">Inactive</span>') + '</td>' +
+        '<td><button class="btn btn-sm ' + (pm.is_active ? 'btn-red' : 'btn-green') + '" onclick="togglePM(' + pm.id + ')">' + (pm.is_active ? 'Deactivate' : 'Activate') + '</button></td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function renderAdminPurchases() {
+    var body = document.getElementById('admin-purchases-body');
+    if (allPurchases.length === 0) {
+      body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--text2);">No sales yet.</td></tr>';
+      return;
+    }
+    body.innerHTML = allPurchases.map(function(p) {
+      var d = new Date(p.purchased_at + 'Z');
+      return '<tr>' +
+        '<td>' + d.toLocaleDateString() + '</td>' +
+        '<td><strong>' + escapeHtml(p.company_name) + '</strong><br><span style="font-size:11px;color:var(--text2);">' + escapeHtml(p.contact_name) + '</span></td>' +
+        '<td>' + escapeHtml(p.owner_name) + '</td>' +
+        '<td>' + escapeHtml(p.city || '') + ', ' + escapeHtml(p.state || '') + '</td>' +
+        '<td style="font-weight:700;color:var(--green);">$' + p.amount + '</td>' +
+        '<td>' + (p.warm_intro_requested ? (p.warm_intro_sent ? '<span class="badge badge-available">Sent</span>' : '<span class="badge badge-warm">Pending</span>') : '-') + '</td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function showAdminTab(tab) {
+    document.querySelectorAll('[id^="admin-tab-"]').forEach(function(el) { el.style.display = 'none'; });
+    document.getElementById('admin-tab-' + tab).style.display = 'block';
+    document.querySelectorAll('#admin-screen .tab-btn').forEach(function(btn, i) {
+      btn.classList.toggle('active', (tab === 'leads' && i === 0) || (tab === 'pms' && i === 1) || (tab === 'purchases' && i === 2));
+    });
+  }
+
+  // Lead CRUD
+  function openAddLead() {
+    document.getElementById('lead-modal-title').textContent = 'Add New Lead';
+    document.getElementById('lead-edit-id').value = '';
+    document.getElementById('lead-owner-name').value = '';
+    document.getElementById('lead-owner-email').value = '';
+    document.getElementById('lead-owner-phone').value = '';
+    document.getElementById('lead-address').value = '';
+    document.getElementById('lead-city').value = '';
+    document.getElementById('lead-state').value = '';
+    document.getElementById('lead-zip').value = '';
+    document.getElementById('lead-bedrooms').value = '1';
+    document.getElementById('lead-bathrooms').value = '1';
+    document.getElementById('lead-type').value = 'entire_home';
+    document.getElementById('lead-listing-url').value = '';
+    document.getElementById('lead-notes').value = '';
+    document.getElementById('lead-warm-intro').checked = false;
+    updatePricePreview();
+    openModal('lead-modal');
+  }
+
+  function editLead(id) {
+    var l = allLeads.find(function(x) { return x.id === id; });
+    if (!l) return;
+    document.getElementById('lead-modal-title').textContent = 'Edit Lead';
+    document.getElementById('lead-edit-id').value = l.id;
+    document.getElementById('lead-owner-name').value = l.owner_name;
+    document.getElementById('lead-owner-email').value = l.owner_email || '';
+    document.getElementById('lead-owner-phone').value = l.owner_phone || '';
+    document.getElementById('lead-address').value = l.property_address;
+    document.getElementById('lead-city').value = l.city || '';
+    document.getElementById('lead-state').value = l.state || '';
+    document.getElementById('lead-zip').value = l.zip || '';
+    document.getElementById('lead-bedrooms').value = String(l.bedrooms);
+    document.getElementById('lead-bathrooms').value = l.bathrooms;
+    document.getElementById('lead-type').value = l.property_type || 'entire_home';
+    document.getElementById('lead-listing-url').value = l.listing_url || '';
+    document.getElementById('lead-notes').value = l.notes || '';
+    document.getElementById('lead-warm-intro').checked = !!l.warm_intro;
+    updatePricePreview();
+    openModal('lead-modal');
+  }
+
+  function updatePricePreview() {
+    var beds = parseInt(document.getElementById('lead-bedrooms').value) || 1;
+    var price = 250;
+    if (beds <= 2) price = 250;
+    else if (beds === 3) price = 350;
+    else if (beds === 4) price = 450;
+    else price = 550;
+    document.getElementById('lead-price-display').textContent = '$' + price;
+  }
+  document.getElementById('lead-bedrooms').addEventListener('change', updatePricePreview);
+
+  async function saveLead() {
+    var data = {
+      owner_name: document.getElementById('lead-owner-name').value.trim(),
+      owner_email: document.getElementById('lead-owner-email').value.trim(),
+      owner_phone: document.getElementById('lead-owner-phone').value.trim(),
+      property_address: document.getElementById('lead-address').value.trim(),
+      city: document.getElementById('lead-city').value.trim(),
+      state: document.getElementById('lead-state').value.trim(),
+      zip: document.getElementById('lead-zip').value.trim(),
+      bedrooms: document.getElementById('lead-bedrooms').value,
+      bathrooms: document.getElementById('lead-bathrooms').value,
+      property_type: document.getElementById('lead-type').value,
+      listing_url: document.getElementById('lead-listing-url').value.trim(),
+      notes: document.getElementById('lead-notes').value.trim(),
+      warm_intro: document.getElementById('lead-warm-intro').checked
+    };
+
+    if (!data.owner_name || !data.property_address) {
+      alert('Owner name and property address are required.');
+      return;
+    }
+
+    var editId = document.getElementById('lead-edit-id').value;
+    var url = editId ? '/api/tl/admin/leads/' + editId : '/api/tl/admin/leads';
+
+    try {
+      var r = await adminFetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+      var result = await r.json();
+      if (result.error) { alert(result.error); return; }
+      closeModal('lead-modal');
+      loadAdminData();
+    } catch(e) {
+      alert('Error saving lead: ' + e.message);
+    }
+  }
+
+  async function deleteLead(id) {
+    if (!confirm('Delete this lead?')) return;
+    try {
+      await adminFetch('/api/tl/admin/leads/' + id, { method: 'DELETE' });
+      loadAdminData();
+    } catch(e) {
+      alert('Error: ' + e.message);
+    }
+  }
+
+  // PM CRUD
+  function openAddPM() { openModal('pm-modal'); }
+
+  async function savePM() {
+    var data = {
+      company_name: document.getElementById('pm-company').value.trim(),
+      contact_name: document.getElementById('pm-contact').value.trim(),
+      email: document.getElementById('pm-email').value.trim(),
+      phone: document.getElementById('pm-phone').value.trim(),
+      password: document.getElementById('pm-password').value
+    };
+    if (!data.company_name || !data.contact_name || !data.email || !data.password) {
+      alert('All fields except phone are required.');
+      return;
+    }
+    try {
+      var r = await adminFetch('/api/tl/admin/pms', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+      var result = await r.json();
+      if (result.error) { alert(result.error); return; }
+      closeModal('pm-modal');
+      document.getElementById('pm-company').value = '';
+      document.getElementById('pm-contact').value = '';
+      document.getElementById('pm-email').value = '';
+      document.getElementById('pm-phone').value = '';
+      document.getElementById('pm-password').value = '';
+      loadAdminData();
+    } catch(e) {
+      alert('Error: ' + e.message);
+    }
+  }
+
+  async function togglePM(id) {
+    try {
+      await adminFetch('/api/tl/admin/pms/' + id + '/toggle', { method: 'POST' });
+      loadAdminData();
+    } catch(e) {
+      alert('Error: ' + e.message);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // PM PORTAL
+  // ═══════════════════════════════════════════════════════
+  function pmFetch(url, opts) {
+    opts = opts || {};
+    opts.headers = opts.headers || {};
+    opts.headers['Authorization'] = 'Bearer ' + pmToken;
+    if (opts.body && typeof opts.body === 'string') opts.headers['Content-Type'] = 'application/json';
+    return fetch(url, opts);
+  }
+
+  async function pmLogin() {
+    var email = document.getElementById('login-email').value.trim();
+    var pw = document.getElementById('login-password').value;
+    var errEl = document.getElementById('login-error');
+
+    if (!email || !pw) { errEl.textContent = 'Please enter email and password.'; errEl.style.display = 'block'; return; }
+
+    try {
+      var r = await fetch('/api/tl/pm/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email, password: pw }) });
+      var result = await r.json();
+      if (result.error) { errEl.textContent = result.error; errEl.style.display = 'block'; return; }
+
+      pmToken = result.token;
+      pmData = result.pm;
+      localStorage.setItem('tl_pm_token', pmToken);
+      showScreen('pm');
+      loadPmData();
+    } catch(e) {
+      errEl.textContent = 'Connection error. Please try again.';
+      errEl.style.display = 'block';
+    }
+  }
+
+  function pmLogout() {
+    pmToken = '';
+    pmData = null;
+    localStorage.removeItem('tl_pm_token');
+    showScreen('login');
+  }
+
+  async function verifyPmSession() {
+    try {
+      var r = await pmFetch('/api/tl/pm/me');
+      if (!r.ok) { pmLogout(); return; }
+      pmData = await r.json();
+      showScreen('pm');
+      loadPmData();
+    } catch(e) {
+      pmLogout();
+    }
+  }
+
+  async function loadPmData() {
+    try {
+      var [leadsR, cartR, purchasedR] = await Promise.all([
+        pmFetch('/api/tl/pm/leads'),
+        pmFetch('/api/tl/pm/cart'),
+        pmFetch('/api/tl/pm/purchased')
+      ]);
+      pmLeads = await leadsR.json();
+      pmCart = await cartR.json();
+      pmPurchased = await purchasedR.json();
+
+      renderPmLeads();
+      updateCartBadge();
+      renderPmPurchased();
+
+      // Load template
+      if (pmData && pmData.warm_intro_template) {
+        document.getElementById('pm-warm-template').value = pmData.warm_intro_template;
+      }
+    } catch(e) {
+      console.error('Failed to load PM data:', e);
+    }
+  }
+
+  function renderPmLeads() {
+    var search = (document.getElementById('pm-search').value || '').toLowerCase();
+    var filterBeds = document.getElementById('pm-filter-beds').value;
+    var filterStatus = document.getElementById('pm-filter-status').value;
+
+    var filtered = pmLeads.filter(function(l) {
+      if (filterStatus && l.status !== filterStatus) return false;
+      if (filterBeds !== '' && String(l.bedrooms) !== filterBeds && !(filterBeds === '5' && l.bedrooms >= 5)) return false;
+      if (search) {
+        var hay = (l.city + ' ' + l.state + ' ' + l.partial_address + ' ' + l.property_type).toLowerCase();
+        if (hay.indexOf(search) === -1) return false;
+      }
+      return true;
+    });
+
+    var grid = document.getElementById('pm-leads-grid');
+    if (filtered.length === 0) {
+      grid.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text2);grid-column:1/-1;">No leads match your filters.</div>';
+      return;
+    }
+
+    grid.innerHTML = filtered.map(function(l) {
+      var typeLabel = l.property_type === 'entire_home' ? 'Entire Home' : l.property_type === 'condo' ? 'Condo/Apt' : l.property_type === 'townhouse' ? 'Townhouse' : l.property_type === 'cabin' ? 'Cabin' : l.property_type;
+      var isSold = l.status === 'sold';
+
+      return '<div class="lead-card' + (isSold ? ' sold' : '') + '">' +
+        (isSold ? '<div class="sold-banner">Sold</div>' : '') +
+        '<div class="lead-price">$' + l.price + '</div>' +
+        '<div class="lead-location">' + escapeHtml(l.partial_address) + ' ' + escapeHtml(l.city || '') + ', ' + escapeHtml(l.state || '') + '</div>' +
+        '<div class="lead-details">' + l.bedrooms + ' Bed / ' + l.bathrooms + ' Bath &middot; ' + typeLabel + '</div>' +
+        (l.warm_intro ? '<div class="warm-badge">&#x1F91D; Warm Intro Available</div>' : '') +
+        '<div style="font-size:11px;color:var(--text2);margin-top:6px;">Listed ' + new Date(l.created_at + 'Z').toLocaleDateString() + '</div>' +
+        (!isSold ? '<div class="lead-actions">' +
+          (l.in_cart ? '<button class="btn btn-sm btn-outline" onclick="removeFromCart(' + l.id + ')">Remove from Cart</button>' :
+           '<button class="btn btn-sm btn-purple" onclick="addToCart(' + l.id + ')">Add to Cart</button>') +
+        '</div>' : '') +
+      '</div>';
+    }).join('');
+  }
+
+  function showPmTab(tab) {
+    document.getElementById('pm-tab-browse').style.display = tab === 'browse' ? 'block' : 'none';
+    document.getElementById('pm-tab-purchased').style.display = tab === 'purchased' ? 'block' : 'none';
+    document.getElementById('pm-tab-settings').style.display = tab === 'settings' ? 'block' : 'none';
+    document.querySelectorAll('#pm-screen .tab-btn').forEach(function(btn, i) {
+      btn.classList.toggle('active', (tab === 'browse' && i === 0) || (tab === 'purchased' && i === 1) || (tab === 'settings' && i === 2));
+    });
+  }
+
+  // Cart
+  async function addToCart(leadId) {
+    try {
+      var r = await pmFetch('/api/tl/pm/cart/add', { method: 'POST', body: JSON.stringify({ lead_id: leadId }) });
+      var result = await r.json();
+      if (result.error) { alert(result.error); return; }
+      loadPmData();
+    } catch(e) { alert('Error: ' + e.message); }
+  }
+
+  async function removeFromCart(leadId) {
+    try {
+      await pmFetch('/api/tl/pm/cart/remove', { method: 'POST', body: JSON.stringify({ lead_id: leadId }) });
+      loadPmData();
+    } catch(e) { alert('Error: ' + e.message); }
+  }
+
+  function updateCartBadge() {
+    var count = pmCart.length;
+    document.getElementById('cart-count').textContent = count;
+    document.getElementById('cart-floating').style.display = count > 0 ? 'block' : 'none';
+  }
+
+  function openCart() {
+    var container = document.getElementById('cart-items');
+    if (pmCart.length === 0) {
+      container.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text2);">Your cart is empty.</div>';
+      document.getElementById('cart-total-amount').textContent = '$0';
+      openModal('cart-modal');
+      return;
+    }
+
+    var total = 0;
+    container.innerHTML = pmCart.map(function(item) {
+      total += item.price;
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">' +
+        '<div>' +
+          '<div style="font-size:14px;font-weight:600;">' + escapeHtml(item.partial_address) + ' ' + escapeHtml(item.city || '') + ', ' + escapeHtml(item.state || '') + '</div>' +
+          '<div style="font-size:12px;color:var(--text2);">' + item.bedrooms + ' BR / ' + item.bathrooms + ' BA</div>' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;gap:12px;">' +
+          '<span style="font-weight:700;color:var(--green);">$' + item.price + '</span>' +
+          '<button class="btn btn-sm btn-red" onclick="removeFromCart(' + item.lead_id + ');closeModal(\'cart-modal\');setTimeout(openCart,300);">Remove</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+    document.getElementById('cart-total-amount').textContent = '$' + total.toLocaleString();
+    openModal('cart-modal');
+  }
+
+  async function checkout() {
+    if (pmCart.length === 0) return;
+    document.getElementById('checkout-btn').textContent = 'Processing...';
+    document.getElementById('checkout-btn').disabled = true;
+
+    try {
+      var r = await pmFetch('/api/tl/pm/checkout', { method: 'POST', body: JSON.stringify({}) });
+      var result = await r.json();
+
+      if (result.error) {
+        alert(result.error);
+        document.getElementById('checkout-btn').textContent = 'Proceed to Checkout';
+        document.getElementById('checkout-btn').disabled = false;
+        loadPmData();
+        return;
+      }
+
+      if (result.mode === 'stripe' && result.url) {
+        window.location.href = result.url;
+      } else {
+        // Manual mode
+        if (confirm('Total: $' + result.total + ' for ' + result.items + ' leads. Confirm purchase?')) {
+          await confirmPurchase(null);
+        }
+        document.getElementById('checkout-btn').textContent = 'Proceed to Checkout';
+        document.getElementById('checkout-btn').disabled = false;
+      }
+    } catch(e) {
+      alert('Checkout error: ' + e.message);
+      document.getElementById('checkout-btn').textContent = 'Proceed to Checkout';
+      document.getElementById('checkout-btn').disabled = false;
+    }
+  }
+
+  async function confirmPurchase(sessionId) {
+    try {
+      await pmFetch('/api/tl/pm/confirm-purchase', { method: 'POST', body: JSON.stringify({ session_id: sessionId }) });
+      closeModal('cart-modal');
+      alert('Purchase complete! Check "My Purchased Leads" to see full details.');
+      // Clean URL
+      window.history.replaceState({}, '', '/trippyleads.html');
+      loadPmData();
+    } catch(e) {
+      console.error('Confirm purchase error:', e);
+    }
+  }
+
+  // Purchased leads
+  function renderPmPurchased() {
+    var container = document.getElementById('pm-purchased-list');
+    if (pmPurchased.length === 0) {
+      container.innerHTML = '<div class="card" style="text-align:center;padding:40px;color:var(--text2);">No purchased leads yet. Browse available leads and add them to your cart!</div>';
+      return;
+    }
+
+    container.innerHTML = pmPurchased.map(function(p) {
+      var d = new Date(p.purchased_at + 'Z');
+      return '<div class="purchased-card">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;">' +
+          '<div>' +
+            '<div style="font-size:16px;font-weight:700;">' + p.bedrooms + ' BR / ' + p.bathrooms + ' BA ' + (p.property_type === 'entire_home' ? 'Home' : p.property_type) + '</div>' +
+            '<div style="font-size:12px;color:var(--text2);margin-top:4px;">Purchased ' + d.toLocaleDateString() + ' &middot; $' + p.amount + '</div>' +
+          '</div>' +
+          '<span class="badge badge-sold">Purchased</span>' +
+        '</div>' +
+        '<div class="owner-info">' +
+          '<h4>Owner Contact Information</h4>' +
+          '<p><strong>Name:</strong> ' + escapeHtml(p.owner_name) + '</p>' +
+          '<p><strong>Email:</strong> ' + escapeHtml(p.owner_email || 'N/A') + '</p>' +
+          '<p><strong>Phone:</strong> ' + escapeHtml(p.owner_phone || 'N/A') + '</p>' +
+          '<p><strong>Address:</strong> ' + escapeHtml(p.property_address) + ', ' + escapeHtml(p.city) + ', ' + escapeHtml(p.state) + ' ' + escapeHtml(p.zip || '') + '</p>' +
+          (p.listing_url ? '<p><strong>Listing:</strong> <a href="' + escapeHtml(p.listing_url) + '" target="_blank" style="color:var(--blue);">' + escapeHtml(p.listing_url) + '</a></p>' : '') +
+          (p.notes ? '<p><strong>Notes:</strong> ' + escapeHtml(p.notes) + '</p>' : '') +
+        '</div>' +
+        (p.warm_intro ? '<div style="margin-top:12px;">' +
+          (p.warm_intro_requested ?
+            (p.warm_intro_sent ? '<span class="badge badge-available">Warm Intro Sent</span>' : '<span class="badge badge-warm">Warm Intro Requested - Pending</span>') :
+            '<button class="btn btn-sm btn-gold" onclick="openWarmIntro(' + p.purchase_id + ')">Request Warm Introduction</button>'
+          ) +
+        '</div>' : '') +
+      '</div>';
+    }).join('');
+  }
+
+  function openWarmIntro(purchaseId) {
+    document.getElementById('warm-intro-purchase-id').value = purchaseId;
+    var template = pmData ? (pmData.warm_intro_template || '') : '';
+    document.getElementById('warm-intro-message').value = template;
+    openModal('warm-intro-modal');
+  }
+
+  async function sendWarmIntro() {
+    var purchaseId = document.getElementById('warm-intro-purchase-id').value;
+    var message = document.getElementById('warm-intro-message').value.trim();
+    if (!message) { alert('Please write an introduction message.'); return; }
+
+    try {
+      await pmFetch('/api/tl/pm/warm-intro', { method: 'POST', body: JSON.stringify({ purchase_id: parseInt(purchaseId), message: message }) });
+      closeModal('warm-intro-modal');
+      alert('Warm introduction requested! HostTurn will send the email shortly.');
+      loadPmData();
+    } catch(e) {
+      alert('Error: ' + e.message);
+    }
+  }
+
+  async function savePmTemplate() {
+    try {
+      await pmFetch('/api/tl/pm/warm-intro-template', { method: 'POST', body: JSON.stringify({ template: document.getElementById('pm-warm-template').value.trim() }) });
+      alert('Template saved!');
+    } catch(e) {
+      alert('Error: ' + e.message);
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════
+  // UTILITIES
+  // ═══════════════════════════════════════════════════════
+  function openModal(id) { document.getElementById(id).classList.add('active'); }
+  function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(str));
+    return div.innerHTML;
+  }
+
+  // Close modals on overlay click
+  document.querySelectorAll('.modal-overlay').forEach(function(overlay) {
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) overlay.classList.remove('active');
+    });
+  });
+</script>
+</body>
+</html>
