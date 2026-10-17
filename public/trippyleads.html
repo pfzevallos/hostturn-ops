@@ -147,7 +147,7 @@
   <div class="tl-logo">
     <div>
       <h1>TrippyLeads</h1>
-      <div class="subtitle">STR Owner Lead Marketplace by HostTurn</div>
+      <div class="subtitle" id="tl-subtitle">STR Owner Lead Marketplace</div>
     </div>
   </div>
   <div class="tl-header-actions" id="header-actions"></div>
@@ -169,7 +169,7 @@
     <div id="login-error" style="color:var(--red);font-size:13px;margin-bottom:12px;display:none;"></div>
     <button class="btn btn-purple" onclick="pmLogin()" style="width:100%;justify-content:center;margin-top:8px;">Sign In</button>
     <div style="margin-top:16px;font-size:12px;color:var(--text2);">
-      Powered by HostTurn
+      &copy; TrippyLeads
     </div>
   </div>
 </div>
@@ -512,9 +512,11 @@
 
     if (name === 'login') {
       document.getElementById('login-screen').style.display = 'block';
-      document.getElementById('header-actions').innerHTML = '<a href="?admin" style="color:rgba(255,255,255,0.4);font-size:12px;text-decoration:none;">Admin</a>';
+      document.getElementById('header-actions').innerHTML = '';
+      document.getElementById('tl-subtitle').textContent = 'STR Owner Lead Marketplace';
     } else if (name === 'admin') {
       document.getElementById('admin-screen').style.display = 'block';
+      document.getElementById('tl-subtitle').textContent = 'STR Owner Lead Marketplace by HostTurn';
       document.getElementById('header-actions').innerHTML = '<span class="user-badge">Admin</span> <button class="btn btn-outline btn-sm" onclick="location.href=\'/trippyleads.html\'" style="color:rgba(255,255,255,0.7);">PM View</button> <a href="/" class="btn btn-outline btn-sm" style="color:rgba(255,255,255,0.7);text-decoration:none;">Ops Dashboard</a>';
     } else if (name === 'pm') {
       document.getElementById('pm-screen').style.display = 'block';
@@ -1048,7 +1050,7 @@
     try {
       await pmFetch('/api/tl/pm/warm-intro', { method: 'POST', body: JSON.stringify({ purchase_id: parseInt(purchaseId), message: message }) });
       closeModal('warm-intro-modal');
-      alert('Warm introduction requested! HostTurn will send the email shortly.');
+      alert('Warm introduction requested! We will send the email shortly.');
       loadPmData();
     } catch(e) {
       alert('Error: ' + e.message);
