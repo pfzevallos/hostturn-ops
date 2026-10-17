@@ -540,8 +540,17 @@ app.delete("/api/properties/:id/notes/:noteId", (req, res) => {
 app.get("/api/properties/notes-counts", (req, res) => {
   const db = getDb();
   const counts = db.prepare("SELECT property_id, COUNT(*) as count FROM property_notes GROUP BY property_id").all();
+  const allNotes = db.prepare("SELECT property_id, note, created_at FROM property_notes ORDER BY created_at DESC").all();
   const map = {};
-  for (const c of counts) map[c.property_id] = c.count;
+  for (const c of counts) {
+    map[c.property_id] = {
+      count: c.count,
+      previews: allNotes.filter(n => n.property_id === c.property_id).slice(0, 5).map(n => ({
+        note: n.note,
+        created_at: n.created_at
+      }))
+    };
+  }
   res.json(map);
 });
 
