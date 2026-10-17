@@ -257,6 +257,82 @@ function initTables() {
       FOREIGN KEY (property_id) REFERENCES properties(id)
     )
   `);
+
+  // ═══════════════════════════════════════════════════════
+  // TrippyLeads Tables
+  // ═══════════════════════════════════════════════════════
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS tl_leads (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      owner_name TEXT NOT NULL,
+      owner_email TEXT DEFAULT '',
+      owner_phone TEXT DEFAULT '',
+      property_address TEXT NOT NULL,
+      city TEXT DEFAULT '',
+      state TEXT DEFAULT '',
+      zip TEXT DEFAULT '',
+      bedrooms INTEGER DEFAULT 1,
+      bathrooms REAL DEFAULT 1,
+      property_type TEXT DEFAULT 'entire_home',
+      listing_url TEXT DEFAULT '',
+      notes TEXT DEFAULT '',
+      warm_intro INTEGER DEFAULT 0,
+      price REAL DEFAULT 250,
+      status TEXT DEFAULT 'available',
+      purchased_by INTEGER,
+      purchased_at TEXT,
+      stripe_payment_id TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS tl_property_managers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_name TEXT NOT NULL,
+      contact_name TEXT NOT NULL,
+      email TEXT NOT NULL UNIQUE,
+      phone TEXT DEFAULT '',
+      password_hash TEXT NOT NULL,
+      is_active INTEGER DEFAULT 1,
+      subscription_status TEXT DEFAULT 'none',
+      stripe_customer_id TEXT DEFAULT '',
+      warm_intro_template TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS tl_cart (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      pm_id INTEGER NOT NULL,
+      lead_id INTEGER NOT NULL,
+      added_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(pm_id, lead_id),
+      FOREIGN KEY (pm_id) REFERENCES tl_property_managers(id),
+      FOREIGN KEY (lead_id) REFERENCES tl_leads(id)
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS tl_purchases (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      pm_id INTEGER NOT NULL,
+      lead_id INTEGER NOT NULL,
+      amount REAL NOT NULL,
+      stripe_session_id TEXT DEFAULT '',
+      stripe_payment_intent TEXT DEFAULT '',
+      purchased_at TEXT DEFAULT (datetime('now')),
+      warm_intro_requested INTEGER DEFAULT 0,
+      warm_intro_sent INTEGER DEFAULT 0,
+      warm_intro_message TEXT DEFAULT '',
+      FOREIGN KEY (pm_id) REFERENCES tl_property_managers(id),
+      FOREIGN KEY (lead_id) REFERENCES tl_leads(id)
+    )
+  `);
 }
 
 module.exports = { getDb };
