@@ -178,6 +178,20 @@
 </div>
 
 <!-- Admin Dashboard -->
+<!-- Admin Login Screen -->
+<div id="admin-login-screen" class="login-container" style="display:none;">
+  <div class="card" style="max-width:400px;margin:60px auto;padding:40px;">
+    <h2 style="text-align:center;margin-bottom:8px;">🔒 Admin Access</h2>
+    <p style="text-align:center;color:var(--text2);font-size:14px;margin-bottom:24px;">Enter the admin password to continue</p>
+    <div id="admin-login-error" style="color:var(--red);font-size:13px;text-align:center;margin-bottom:12px;"></div>
+    <input type="password" id="admin-password" placeholder="Admin password" class="form-input" style="width:100%;margin-bottom:16px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;font-size:15px;" onkeydown="if(event.key==='Enter')adminLogin()">
+    <button class="btn btn-purple" style="width:100%;padding:10px;" onclick="adminLogin()">Sign In</button>
+    <div style="text-align:center;margin-top:16px;">
+      <a href="/trippyleads.html" style="color:var(--text2);font-size:13px;">← Back to PM login</a>
+    </div>
+  </div>
+</div>
+
 <div id="admin-screen" style="display:none;">
   <div class="tl-container">
     <div class="stats-row" id="admin-stats"></div>
@@ -517,7 +531,7 @@
   // ═══════════════════════════════════════════════════════
   // STATE
   // ═══════════════════════════════════════════════════════
-  var ADMIN_KEY = 'hostturn2024';
+  var adminToken = sessionStorage.getItem('tl_admin_token') || '';
   var pmToken = localStorage.getItem('tl_pm_token') || '';
   var pmData = null;
   var allLeads = [];
@@ -535,9 +549,14 @@
     var params = new URLSearchParams(window.location.search);
 
     if (params.get('admin') !== null) {
-      isAdminMode = true;
-      showScreen('admin');
-      loadAdminData();
+      if (adminToken) {
+        // Already logged in as admin this session
+        isAdminMode = true;
+        showScreen('admin');
+        loadAdminData();
+      } else {
+        showScreen('admin-login');
+      }
       return;
     }
 
@@ -557,8 +576,13 @@
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('admin-screen').style.display = 'none';
     document.getElementById('pm-screen').style.display = 'none';
+    document.getElementById('admin-login-screen').style.display = 'none';
 
-    if (name === 'login') {
+    if (name === 'admin-login') {
+      document.getElementById('admin-login-screen').style.display = 'block';
+      document.getElementById('header-actions').innerHTML = '';
+      document.getElementById('tl-subtitle').textContent = 'Admin Access';
+    } else if (name === 'login') {
       document.getElementById('login-screen').style.display = 'block';
       document.getElementById('header-actions').innerHTML = '';
       document.getElementById('tl-subtitle').textContent = 'STR Owner Lead Marketplace';
@@ -579,8 +603,31 @@
   function adminFetch(url, opts) {
     opts = opts || {};
     opts.headers = opts.headers || {};
-    opts.headers['x-admin-key'] = ADMIN_KEY;
+    opts.headers['Authorization'] = 'Bearer ' + adminToken;
     return fetch(url, opts);
+  }
+
+  async function adminLogin() {
+    var pw = document.getElementById('admin-password').value;
+    var errEl = document.getElementById('admin-login-error');
+    errEl.textContent = '';
+    if (!pw) { errEl.textContent = 'Please enter a password.'; return; }
+    try {
+      var r = await fetch('/api/tl/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw })
+      });
+      var data = await r.json();
+      if (!r.ok) { errEl.textContent = data.error || 'Invalid password'; return; }
+      adminToken = data.token;
+      sessionStorage.setItem('tl_admin_token', adminToken);
+      isAdminMode = true;
+      showScreen('admin');
+      loadAdminData();
+    } catch (e) {
+      errEl.textContent = 'Login failed. Please try again.';
+    }
   }
 
   async function loadAdminData() {
