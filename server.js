@@ -1304,7 +1304,7 @@ app.get("/api/tl/admin/leads", (req, res) => {
 app.post("/api/tl/admin/leads", (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ error: "Unauthorized" });
   const db = getDb();
-  const { owner_name, owner_email, owner_phone, property_address, city, state, zip, bedrooms, bathrooms, property_type, listing_url, notes, warm_intro } = req.body;
+  const { owner_name, owner_email, owner_phone, property_address, city, state, zip, bedrooms, bathrooms, property_type, listing_url, display_name, description, notes, warm_intro } = req.body;
 
   // Auto-price based on bedrooms
   let price = 250;
@@ -1315,9 +1315,9 @@ app.post("/api/tl/admin/leads", (req, res) => {
   else price = 550;
 
   const result = db.prepare(`
-    INSERT INTO tl_leads (owner_name, owner_email, owner_phone, property_address, city, state, zip, bedrooms, bathrooms, property_type, listing_url, notes, warm_intro, price)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(owner_name || '', owner_email || '', owner_phone || '', property_address || '', city || '', state || '', zip || '', beds, parseFloat(bathrooms) || 1, property_type || 'entire_home', listing_url || '', notes || '', warm_intro ? 1 : 0, price);
+    INSERT INTO tl_leads (owner_name, owner_email, owner_phone, property_address, city, state, zip, bedrooms, bathrooms, property_type, listing_url, display_name, description, notes, warm_intro, price)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(owner_name || '', owner_email || '', owner_phone || '', property_address || '', city || '', state || '', zip || '', beds, parseFloat(bathrooms) || 1, property_type || 'entire_home', listing_url || '', display_name || '', description || '', notes || '', warm_intro ? 1 : 0, price);
 
   res.json({ ok: true, id: result.lastInsertRowid, price });
 });
@@ -1325,12 +1325,12 @@ app.post("/api/tl/admin/leads", (req, res) => {
 app.post("/api/tl/admin/leads/:id", (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ error: "Unauthorized" });
   const db = getDb();
-  const { owner_name, owner_email, owner_phone, property_address, city, state, zip, bedrooms, bathrooms, property_type, listing_url, notes, warm_intro, price } = req.body;
+  const { owner_name, owner_email, owner_phone, property_address, city, state, zip, bedrooms, bathrooms, property_type, listing_url, display_name, description, notes, warm_intro, price } = req.body;
 
   db.prepare(`
-    UPDATE tl_leads SET owner_name=?, owner_email=?, owner_phone=?, property_address=?, city=?, state=?, zip=?, bedrooms=?, bathrooms=?, property_type=?, listing_url=?, notes=?, warm_intro=?, price=?, updated_at=datetime('now')
+    UPDATE tl_leads SET owner_name=?, owner_email=?, owner_phone=?, property_address=?, city=?, state=?, zip=?, bedrooms=?, bathrooms=?, property_type=?, listing_url=?, display_name=?, description=?, notes=?, warm_intro=?, price=?, updated_at=datetime('now')
     WHERE id=?
-  `).run(owner_name, owner_email, owner_phone, property_address, city, state, zip, parseInt(bedrooms) || 1, parseFloat(bathrooms) || 1, property_type, listing_url, notes, warm_intro ? 1 : 0, parseFloat(price) || 250, req.params.id);
+  `).run(owner_name, owner_email, owner_phone, property_address, city, state, zip, parseInt(bedrooms) || 1, parseFloat(bathrooms) || 1, property_type, listing_url, display_name || '', description || '', notes, warm_intro ? 1 : 0, parseFloat(price) || 250, req.params.id);
 
   res.json({ ok: true });
 });
@@ -1427,10 +1427,7 @@ app.get("/api/tl/pm/leads", (req, res) => {
 
   const leads = db.prepare(`
     SELECT id, city, state, bedrooms, bathrooms, property_type, warm_intro, price, status, created_at,
-      CASE WHEN LENGTH(property_address) > 0
-        THEN SUBSTR(property_address, 1, INSTR(property_address || ' ', ' ')) || '***'
-        ELSE '***'
-      END as partial_address
+      display_name, description
     FROM tl_leads
     ORDER BY created_at DESC
   `).all();
@@ -1455,10 +1452,7 @@ app.get("/api/tl/pm/cart", (req, res) => {
   const items = db.prepare(`
     SELECT c.id as cart_id, c.lead_id, c.added_at,
       l.city, l.state, l.bedrooms, l.bathrooms, l.property_type, l.warm_intro, l.price, l.status,
-      CASE WHEN LENGTH(l.property_address) > 0
-        THEN SUBSTR(l.property_address, 1, INSTR(l.property_address || ' ', ' ')) || '***'
-        ELSE '***'
-      END as partial_address
+      l.display_name, l.description
     FROM tl_cart c
     JOIN tl_leads l ON c.lead_id = l.id
     WHERE c.pm_id = ?
