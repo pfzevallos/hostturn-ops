@@ -276,6 +276,8 @@ function initTables() {
       bathrooms REAL DEFAULT 1,
       property_type TEXT DEFAULT 'entire_home',
       listing_url TEXT DEFAULT '',
+      display_name TEXT DEFAULT '',
+      description TEXT DEFAULT '',
       notes TEXT DEFAULT '',
       warm_intro INTEGER DEFAULT 0,
       price REAL DEFAULT 250,
@@ -287,6 +289,10 @@ function initTables() {
       updated_at TEXT DEFAULT (datetime('now'))
     )
   `);
+
+  // Migrations for tl_leads
+  try { db.exec("ALTER TABLE tl_leads ADD COLUMN display_name TEXT DEFAULT ''"); } catch(e) {}
+  try { db.exec("ALTER TABLE tl_leads ADD COLUMN description TEXT DEFAULT ''"); } catch(e) {}
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS tl_property_managers (
