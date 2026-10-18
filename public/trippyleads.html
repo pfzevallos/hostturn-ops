@@ -85,7 +85,7 @@
     .leads-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px, 1fr)); gap:16px; }
     .lead-card { background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:18px; transition:all 0.2s; position:relative; }
     .lead-card:hover { border-color:var(--purple); transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,0,0,0.08); }
-    .lead-card.sold { opacity:0.5; pointer-events:none; }
+    .lead-card.sold { opacity:0.75; pointer-events:none; background:var(--surface3); }
     .lead-card .lead-price { font-size:24px; font-weight:800; color:var(--green); }
     .lead-card .lead-location { font-size:14px; color:var(--text); margin:8px 0; }
     .lead-card .lead-details { font-size:12px; color:var(--text2); margin:6px 0; }
@@ -278,8 +278,8 @@
           <option value="5">5+ BR</option>
         </select>
         <select id="pm-filter-status" style="padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;" onchange="renderPmLeads()">
-          <option value="available">Available</option>
           <option value="">All</option>
+          <option value="available">Available</option>
           <option value="sold">Sold</option>
         </select>
       </div>
@@ -942,10 +942,11 @@
         (l.description ? '<div style="font-size:12px;color:var(--text2);margin:6px 0;line-height:1.4;">' + escapeHtml(l.description) + '</div>' : '') +
         (l.warm_intro ? '<div class="warm-badge">&#x1F91D; Warm Intro Available</div>' : '') +
         '<div style="font-size:11px;color:var(--text2);margin-top:6px;">Listed ' + new Date(l.created_at + 'Z').toLocaleDateString() + '</div>' +
-        (!isSold ? '<div class="lead-actions">' +
+        '<div class="lead-actions">' +
+        (isSold ? '<div style="font-size:12px;font-weight:600;color:var(--red);">✅ Purchased by another PM</div>' :
           (l.in_cart ? '<button class="btn btn-sm btn-outline" onclick="removeFromCart(' + l.id + ')">Remove from Cart</button>' :
-           '<button class="btn btn-sm btn-purple" onclick="addToCart(' + l.id + ')">Add to Cart</button>') +
-        '</div>' : '') +
+           '<button class="btn btn-sm btn-purple" onclick="addToCart(' + l.id + ')">Add to Cart</button>')) +
+        '</div>' +
       '</div>';
     }).join('');
   }
