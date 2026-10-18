@@ -381,9 +381,20 @@
       <label>Listing URL (Airbnb, VRBO, etc.)</label>
       <input type="url" id="lead-listing-url" placeholder="https://airbnb.com/rooms/...">
     </div>
-    <div class="form-group">
-      <label>Notes</label>
-      <textarea id="lead-notes" rows="3" placeholder="Any additional details about the lead..."></textarea>
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;margin-top:8px;">
+      <div style="font-size:12px;font-weight:700;color:var(--purple);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">What Property Managers See</div>
+      <div class="form-group">
+        <label>Display Name *</label>
+        <input type="text" id="lead-display-name" placeholder="e.g. Mountain View Lodge, Stowe Village Condo">
+      </div>
+      <div class="form-group" style="margin-bottom:0;">
+        <label>Description</label>
+        <textarea id="lead-description" rows="2" placeholder="e.g. Luxury ski-in/ski-out condo in Stowe Mountain Resort..."></textarea>
+      </div>
+    </div>
+    <div class="form-group" style="margin-top:14px;">
+      <label>Notes (admin only)</label>
+      <textarea id="lead-notes" rows="3" placeholder="Internal notes — PMs will NOT see this..."></textarea>
     </div>
     <div class="form-group" style="display:flex;align-items:center;gap:10px;">
       <input type="checkbox" id="lead-warm-intro" style="width:auto;">
@@ -686,6 +697,8 @@
     document.getElementById('lead-bathrooms').value = '1';
     document.getElementById('lead-type').value = 'entire_home';
     document.getElementById('lead-listing-url').value = '';
+    document.getElementById('lead-display-name').value = '';
+    document.getElementById('lead-description').value = '';
     document.getElementById('lead-notes').value = '';
     document.getElementById('lead-warm-intro').checked = false;
     updatePricePreview();
@@ -708,6 +721,8 @@
     document.getElementById('lead-bathrooms').value = l.bathrooms;
     document.getElementById('lead-type').value = l.property_type || 'entire_home';
     document.getElementById('lead-listing-url').value = l.listing_url || '';
+    document.getElementById('lead-display-name').value = l.display_name || '';
+    document.getElementById('lead-description').value = l.description || '';
     document.getElementById('lead-notes').value = l.notes || '';
     document.getElementById('lead-warm-intro').checked = !!l.warm_intro;
     updatePricePreview();
@@ -738,12 +753,18 @@
       bathrooms: document.getElementById('lead-bathrooms').value,
       property_type: document.getElementById('lead-type').value,
       listing_url: document.getElementById('lead-listing-url').value.trim(),
+      display_name: document.getElementById('lead-display-name').value.trim(),
+      description: document.getElementById('lead-description').value.trim(),
       notes: document.getElementById('lead-notes').value.trim(),
       warm_intro: document.getElementById('lead-warm-intro').checked
     };
 
     if (!data.owner_name || !data.property_address) {
       alert('Owner name and property address are required.');
+      return;
+    }
+    if (!data.display_name) {
+      alert('Display Name is required — this is what property managers will see.');
       return;
     }
 
@@ -897,7 +918,7 @@
       if (filterStatus && l.status !== filterStatus) return false;
       if (filterBeds !== '' && String(l.bedrooms) !== filterBeds && !(filterBeds === '5' && l.bedrooms >= 5)) return false;
       if (search) {
-        var hay = (l.city + ' ' + l.state + ' ' + l.partial_address + ' ' + l.property_type).toLowerCase();
+        var hay = (l.city + ' ' + l.state + ' ' + (l.display_name || '') + ' ' + (l.description || '') + ' ' + l.property_type).toLowerCase();
         if (hay.indexOf(search) === -1) return false;
       }
       return true;
@@ -916,8 +937,9 @@
       return '<div class="lead-card' + (isSold ? ' sold' : '') + '">' +
         (isSold ? '<div class="sold-banner">Sold</div>' : '') +
         '<div class="lead-price">$' + l.price + '</div>' +
-        '<div class="lead-location">' + escapeHtml(l.partial_address) + ' ' + escapeHtml(l.city || '') + ', ' + escapeHtml(l.state || '') + '</div>' +
-        '<div class="lead-details">' + l.bedrooms + ' Bed / ' + l.bathrooms + ' Bath &middot; ' + typeLabel + '</div>' +
+        '<div class="lead-location" style="font-weight:600;">' + escapeHtml(l.display_name || 'Property') + '</div>' +
+        '<div class="lead-details">' + escapeHtml(l.city || '') + ', ' + escapeHtml(l.state || '') + ' &middot; ' + l.bedrooms + ' Bed / ' + l.bathrooms + ' Bath &middot; ' + typeLabel + '</div>' +
+        (l.description ? '<div style="font-size:12px;color:var(--text2);margin:6px 0;line-height:1.4;">' + escapeHtml(l.description) + '</div>' : '') +
         (l.warm_intro ? '<div class="warm-badge">&#x1F91D; Warm Intro Available</div>' : '') +
         '<div style="font-size:11px;color:var(--text2);margin-top:6px;">Listed ' + new Date(l.created_at + 'Z').toLocaleDateString() + '</div>' +
         (!isSold ? '<div class="lead-actions">' +
@@ -975,7 +997,8 @@
       total += item.price;
       return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">' +
         '<div>' +
-          '<div style="font-size:14px;font-weight:600;">' + escapeHtml(item.partial_address) + ' ' + escapeHtml(item.city || '') + ', ' + escapeHtml(item.state || '') + '</div>' +
+          '<div style="font-size:14px;font-weight:600;">' + escapeHtml(item.display_name || 'Property') + '</div>' +
+          '<div style="font-size:11px;color:var(--text2);">' + escapeHtml(item.city || '') + ', ' + escapeHtml(item.state || '') + '</div>' +
           '<div style="font-size:12px;color:var(--text2);">' + item.bedrooms + ' BR / ' + item.bathrooms + ' BA</div>' +
         '</div>' +
         '<div style="display:flex;align-items:center;gap:12px;">' +
