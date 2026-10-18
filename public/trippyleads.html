@@ -441,6 +441,40 @@
       <span style="font-size:16px;font-weight:600;">Total:</span>
       <span id="cart-total-amount" style="font-size:24px;font-weight:800;color:var(--green);">$0</span>
     </div>
+    <!-- Terms & Conditions -->
+    <div style="margin-top:16px;border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+      <div style="background:var(--surface2);padding:10px 14px;font-size:13px;font-weight:700;color:var(--text);border-bottom:1px solid var(--border);">Terms &amp; Conditions of Purchase</div>
+      <div style="max-height:180px;overflow-y:auto;padding:14px;font-size:12px;line-height:1.6;color:var(--text2);">
+        <p style="margin:0 0 10px;font-weight:600;color:var(--text);">By completing this purchase, you ("Buyer") agree to the following terms:</p>
+
+        <p style="margin:0 0 8px;"><strong>1. Nature of Service.</strong> TrippyLeads provides contact information and property details for individuals we believe, to the best of our knowledge, to be current owners of active short-term rental properties. This information is compiled from publicly available sources, third-party data providers, and our own research.</p>
+
+        <p style="margin:0 0 8px;"><strong>2. No Guarantee of Accuracy.</strong> While we make reasonable efforts to ensure the accuracy of lead information, we do not warrant or guarantee that: (a) any individual identified is currently an active short-term rental owner; (b) any property identified is currently operating as a short-term rental; (c) contact information (including name, phone, email, or address) is current, complete, or accurate; or (d) any owner is seeking or will be receptive to property management services.</p>
+
+        <p style="margin:0 0 8px;"><strong>3. No Guarantee of Outcome.</strong> TrippyLeads makes no representation, warranty, or guarantee that any lead will result in a signed property management agreement, business relationship, or any other commercial outcome. The purchase of a lead is solely for the contact information provided, and no refunds will be issued based on the outcome of your outreach efforts.</p>
+
+        <p style="margin:0 0 8px;"><strong>4. Responsible Use &amp; Compliance.</strong> Buyer agrees to: (a) use all lead information solely for legitimate business outreach related to property management services; (b) conduct all communications in a professional, courteous, and non-harassing manner; (c) immediately cease all contact with any individual who requests not to be contacted; (d) comply with all applicable federal, state, and local laws, including but not limited to the Telephone Consumer Protection Act (TCPA), CAN-SPAM Act, state do-not-call regulations, and any applicable privacy laws; and (e) not resell, redistribute, share, or sublicense lead information to any third party.</p>
+
+        <p style="margin:0 0 8px;"><strong>5. Anti-Harassment.</strong> Buyer shall not engage in any form of harassment, intimidation, threats, or coercion toward any individual whose information is provided. Excessive or repeated contact after a request to stop constitutes a violation of these terms and may result in immediate termination of your account without refund.</p>
+
+        <p style="margin:0 0 8px;"><strong>6. Confidentiality.</strong> Lead information is provided exclusively for Buyer's internal business use. Buyer shall not disclose, publish, or share lead details (including owner names, contact information, and property addresses) with any third party without the express written consent of TrippyLeads.</p>
+
+        <p style="margin:0 0 8px;"><strong>7. Indemnification.</strong> Buyer agrees to indemnify, defend, and hold harmless TrippyLeads, its owners, officers, employees, and affiliates from and against any and all claims, damages, losses, liabilities, costs, and expenses (including reasonable attorney's fees) arising from or related to: (a) Buyer's use of lead information; (b) Buyer's outreach to or communications with any lead; (c) any violation of these terms; or (d) any violation of applicable law by Buyer.</p>
+
+        <p style="margin:0 0 8px;"><strong>8. Limitation of Liability.</strong> In no event shall TrippyLeads be liable for any indirect, incidental, special, consequential, or punitive damages arising out of or related to your purchase or use of lead information. TrippyLeads' total liability shall not exceed the amount paid for the specific lead(s) giving rise to the claim.</p>
+
+        <p style="margin:0 0 8px;"><strong>9. No Refunds.</strong> All lead purchases are final. No refunds or credits will be issued once a lead has been purchased and the full contact details have been revealed, except at the sole discretion of TrippyLeads in cases of demonstrably incorrect or duplicate information.</p>
+
+        <p style="margin:0 0 8px;"><strong>10. Account Termination.</strong> TrippyLeads reserves the right to suspend or terminate Buyer's account and access at any time, with or without cause, and without refund for any unused leads or credits, particularly in cases of misuse, harassment, or violation of these terms.</p>
+
+        <p style="margin:0;"><strong>11. Modification.</strong> TrippyLeads reserves the right to modify these terms at any time. Continued use of the platform after any modification constitutes acceptance of the revised terms.</p>
+      </div>
+    </div>
+    <label style="display:flex;align-items:flex-start;gap:10px;margin-top:12px;cursor:pointer;font-size:13px;color:var(--text);">
+      <input type="checkbox" id="terms-agree" style="margin-top:2px;width:18px;height:18px;accent-color:var(--purple);flex-shrink:0;">
+      <span>I have read and agree to the Terms &amp; Conditions above. I understand that leads are provided as-is and I will use them responsibly and in compliance with all applicable laws.</span>
+    </label>
+
     <div class="form-actions">
       <button class="btn btn-outline" onclick="closeModal('cart-modal')">Continue Browsing</button>
       <button class="btn btn-gold" onclick="checkout()" id="checkout-btn">Proceed to Checkout</button>
@@ -924,6 +958,7 @@
   }
 
   function openCart() {
+    document.getElementById('terms-agree').checked = false;
     var container = document.getElementById('cart-items');
     if (pmCart.length === 0) {
       container.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text2);">Your cart is empty.</div>';
@@ -953,6 +988,10 @@
 
   async function checkout() {
     if (pmCart.length === 0) return;
+    if (!document.getElementById('terms-agree').checked) {
+      alert('Please read and agree to the Terms & Conditions before proceeding.');
+      return;
+    }
     document.getElementById('checkout-btn').textContent = 'Processing...';
     document.getElementById('checkout-btn').disabled = true;
 
