@@ -1281,11 +1281,41 @@ function getPmFromToken(req) {
   return session.pmId;
 }
 
-// Admin auth middleware (uses same admin check as main app - simple header)
+// Admin session tokens (in-memory)
+const adminSessions = {};
+
+// Admin auth middleware - checks session token OR x-admin-key header
 function isAdmin(req) {
+  // Check admin session token first (from login flow)
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith("Bearer ")) {
+    const token = auth.slice(7);
+    const session = adminSessions[token];
+    if (session) {
+      // 24hr expiry
+      if (Date.now() - session.created > 24 * 60 * 60 * 1000) {
+        delete adminSessions[token];
+        return false;
+      }
+      return true;
+    }
+  }
+  // Fallback: x-admin-key header (for API/server-to-server use)
   const key = req.headers["x-admin-key"] || req.query.admin_key;
   return key === (process.env.ADMIN_KEY || "hostturn2024");
 }
+
+// Admin login endpoint
+app.post("/api/tl/admin/login", (req, res) => {
+  const { password } = req.body;
+  const adminKey = process.env.ADMIN_KEY || "hostturn2024";
+  if (password !== adminKey) {
+    return res.status(401).json({ error: "Invalid password" });
+  }
+  const token = "adm_" + crypto.randomBytes(32).toString("hex");
+  adminSessions[token] = { created: Date.now() };
+  res.json({ ok: true, token });
+});
 
 // --- Admin: Manage Leads ---
 app.get("/api/tl/admin/leads", (req, res) => {
