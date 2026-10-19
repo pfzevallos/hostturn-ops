@@ -1391,10 +1391,12 @@ app.post("/api/tl/admin/leads", (req, res) => {
   else price = 550;
 
   const addon_agreement = req.body.addon_agreement ? 1 : 0;
+  const has_pm = req.body.has_pm ? 1 : 0;
+  const current_pm = req.body.current_pm || '';
   const result = db.prepare(`
-    INSERT INTO tl_leads (owner_name, owner_email, owner_phone, property_address, city, state, zip, bedrooms, bathrooms, property_type, listing_url, display_name, description, notes, warm_intro, price, addon_agreement)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(owner_name || '', owner_email || '', owner_phone || '', property_address || '', city || '', state || '', zip || '', beds, parseFloat(bathrooms) || 1, property_type || 'entire_home', listing_url || '', display_name || '', description || '', notes || '', warm_intro ? 1 : 0, price, addon_agreement);
+    INSERT INTO tl_leads (owner_name, owner_email, owner_phone, property_address, city, state, zip, bedrooms, bathrooms, property_type, listing_url, display_name, description, notes, warm_intro, price, addon_agreement, has_pm, current_pm)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(owner_name || '', owner_email || '', owner_phone || '', property_address || '', city || '', state || '', zip || '', beds, parseFloat(bathrooms) || 1, property_type || 'entire_home', listing_url || '', display_name || '', description || '', notes || '', warm_intro ? 1 : 0, price, addon_agreement, has_pm, current_pm);
 
   res.json({ ok: true, id: result.lastInsertRowid, price });
 });
@@ -1402,12 +1404,12 @@ app.post("/api/tl/admin/leads", (req, res) => {
 app.post("/api/tl/admin/leads/:id", (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ error: "Unauthorized" });
   const db = getDb();
-  const { owner_name, owner_email, owner_phone, property_address, city, state, zip, bedrooms, bathrooms, property_type, listing_url, display_name, description, notes, warm_intro, price, addon_agreement } = req.body;
+  const { owner_name, owner_email, owner_phone, property_address, city, state, zip, bedrooms, bathrooms, property_type, listing_url, display_name, description, notes, warm_intro, price, addon_agreement, has_pm, current_pm } = req.body;
 
   db.prepare(`
-    UPDATE tl_leads SET owner_name=?, owner_email=?, owner_phone=?, property_address=?, city=?, state=?, zip=?, bedrooms=?, bathrooms=?, property_type=?, listing_url=?, display_name=?, description=?, notes=?, warm_intro=?, price=?, addon_agreement=?, updated_at=datetime('now')
+    UPDATE tl_leads SET owner_name=?, owner_email=?, owner_phone=?, property_address=?, city=?, state=?, zip=?, bedrooms=?, bathrooms=?, property_type=?, listing_url=?, display_name=?, description=?, notes=?, warm_intro=?, price=?, addon_agreement=?, has_pm=?, current_pm=?, updated_at=datetime('now')
     WHERE id=?
-  `).run(owner_name, owner_email, owner_phone, property_address, city, state, zip, parseInt(bedrooms) || 1, parseFloat(bathrooms) || 1, property_type, listing_url, display_name || '', description || '', notes, warm_intro ? 1 : 0, parseFloat(price) || 250, addon_agreement ? 1 : 0, req.params.id);
+  `).run(owner_name, owner_email, owner_phone, property_address, city, state, zip, parseInt(bedrooms) || 1, parseFloat(bathrooms) || 1, property_type, listing_url, display_name || '', description || '', notes, warm_intro ? 1 : 0, parseFloat(price) || 250, addon_agreement ? 1 : 0, has_pm ? 1 : 0, current_pm || '', req.params.id);
 
   res.json({ ok: true });
 });
@@ -1504,7 +1506,7 @@ app.get("/api/tl/pm/leads", (req, res) => {
 
   const leads = db.prepare(`
     SELECT id, city, state, bedrooms, bathrooms, property_type, warm_intro, price, status, created_at,
-      display_name, description, addon_agreement
+      display_name, description, addon_agreement, has_pm
     FROM tl_leads
     ORDER BY created_at DESC
   `).all();
