@@ -9,12 +9,59 @@ const sms = require("./sms");
 const auto = require("./automation");
 const closeout = require("./closeout");
 
+const crypto = require("crypto");
 const app = express();
 app.use(cors());
+
+// --- Ops Dashboard Auth ---
+const opsSessions = {};
+const OPS_PASSWORD = process.env.OPS_PASSWORD || process.env.ADMIN_KEY || "hostturn2024";
+
+function isOpsAuthenticated(req) {
+  const auth = req.headers.authorization;
+  if (auth && auth.startsWith("Bearer ops_")) {
+    const token = auth.slice(7);
+    const session = opsSessions[token];
+    if (session) {
+      if (Date.now() - session.created > 24 * 60 * 60 * 1000) {
+        delete opsSessions[token];
+        return false;
+      }
+      return true;
+    }
+  }
+  return false;
+}
+
+// Ops login endpoint (before body parsers so it works with json)
+app.post("/api/ops/login", express.json(), (req, res) => {
+  const { password } = req.body;
+  if (password !== OPS_PASSWORD) {
+    return res.status(401).json({ error: "Invalid password" });
+  }
+  const token = "ops_" + crypto.randomBytes(32).toString("hex");
+  opsSessions[token] = { created: Date.now() };
+  res.json({ ok: true, token });
+});
+
+// Protect Ops API routes (but NOT /api/tl/*, /webhook/*, or static TrippyLeads files)
+app.use("/api", (req, res, next) => {
+  // Allow TrippyLeads routes through (they have their own auth)
+  if (req.path.startsWith("/tl/")) return next();
+  // Allow ops login
+  if (req.path === "/ops/login") return next();
+  // Everything else requires ops auth
+  if (!isOpsAuthenticated(req)) {
+    return res.status(401).json({ error: "Ops login required" });
+  }
+  next();
+});
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve dashboard
+// Serve static files - trippyleads.html and sms-consent.html are public,
+// index.html has its own client-side login gate
 app.use(express.static(path.join(__dirname, "public")));
 
 
@@ -1248,7 +1295,6 @@ app.delete("/api/prospects/:id", (req, res) => {
 // ═══════════════════════════════════════════════════════
 
 // Simple password hashing (bcrypt-like but no extra dep)
-const crypto = require("crypto");
 function hashPassword(pw) {
   const salt = crypto.randomBytes(16).toString("hex");
   const hash = crypto.scryptSync(pw, salt, 64).toString("hex");
