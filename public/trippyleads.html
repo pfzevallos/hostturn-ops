@@ -261,6 +261,7 @@
             <th>Location</th>
             <th>Amount</th>
             <th>Warm Intro</th>
+            <th>Add-On</th>
           </tr>
         </thead>
         <tbody id="admin-purchases-body"></tbody>
@@ -414,6 +415,10 @@
       <input type="checkbox" id="lead-warm-intro" style="width:auto;">
       <label for="lead-warm-intro" style="margin:0;font-size:14px;color:var(--text);cursor:pointer;">Warm Introduction Available</label>
     </div>
+    <div class="form-group" style="display:flex;align-items:center;gap:10px;">
+      <input type="checkbox" id="lead-addon-agreement" style="width:auto;">
+      <label for="lead-addon-agreement" style="margin:0;font-size:14px;color:var(--text);cursor:pointer;">Add-On Agreement (Closing Bonus + Cleaning Commitment)</label>
+    </div>
     <div id="lead-price-preview" style="background:var(--surface3);border-radius:8px;padding:12px;margin-top:8px;font-size:14px;display:flex;justify-content:space-between;align-items:center;">
       <span style="color:var(--text2);">Lead Price:</span>
       <span style="font-size:20px;font-weight:700;color:var(--green);" id="lead-price-display">$250</span>
@@ -523,6 +528,48 @@
     <div class="form-actions">
       <button class="btn btn-outline" onclick="closeModal('warm-intro-modal')">Cancel</button>
       <button class="btn btn-gold" onclick="sendWarmIntro()">Send Request</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add-On Agreement Modal -->
+<div class="modal-overlay" id="addon-agreement-modal">
+  <div class="modal" style="max-width:600px;max-height:85vh;overflow-y:auto;">
+    <h3 style="color:var(--purple);">Add-On Agreement</h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">Please review the terms below. By clicking "Accept Agreement" you agree to both the closing bonus and cleaning commitment terms for this property.</p>
+
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:14px;">
+      <h4 style="margin:0 0 8px 0;font-size:14px;color:var(--text);">1. Closing Bonus</h4>
+      <ul style="font-size:12px;color:var(--text2);line-height:1.6;margin:0;padding-left:18px;">
+        <li>A <strong>$1,250 closing bonus</strong> is payable for each approved referred property that closes (owner signs a property management agreement and property launches on a rental platform).</li>
+        <li>Applies within <strong>24 months</strong> of the warm introduction date.</li>
+        <li>Property Manager agrees to notify the referrer when a referred property closes.</li>
+        <li>Renewals or repeat introductions to the same owner for the same property earn no additional fees.</li>
+        <li>Fee changes require a written agreement between both parties.</li>
+      </ul>
+    </div>
+
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:14px;">
+      <h4 style="margin:0 0 8px 0;font-size:14px;color:var(--text);">2. Cleaning Commitment</h4>
+      <ul style="font-size:12px;color:var(--text2);line-height:1.6;margin:0;padding-left:18px;">
+        <li>Property Manager agrees to engage the referrer's cleaning service as the cleaning provider for referred properties that close, subject to owner approval and mutually agreed pricing.</li>
+        <li>Cleaning rates will be at <strong>market value</strong> as demonstrated by comparable properties serviced by the cleaning provider.</li>
+        <li>Cleaning charges are separate from referral fees and closing bonuses.</li>
+        <li>This commitment applies only to properties referred under this agreement.</li>
+        <li>Property Manager may use another provider if: the cleaning provider cannot provide adequate coverage, the parties cannot agree on cleaning terms, or cleaning performance is inadequate after reasonable notice.</li>
+        <li>Ending the cleaning arrangement does not cancel referral fees or closing bonus obligations already incurred.</li>
+      </ul>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+      <input type="checkbox" id="addon-agree-check" style="width:auto;">
+      <label for="addon-agree-check" style="margin:0;font-size:13px;color:var(--text);cursor:pointer;">I have read and agree to the Add-On Agreement terms above.</label>
+    </div>
+
+    <input type="hidden" id="addon-purchase-id">
+    <div class="form-actions">
+      <button class="btn btn-outline" onclick="closeModal('addon-agreement-modal')">Cancel</button>
+      <button class="btn btn-purple" onclick="acceptAddon()">Accept Agreement</button>
     </div>
   </div>
 </div>
@@ -675,7 +722,7 @@
         '<td>' + escapeHtml(l.city || '') + ', ' + escapeHtml(l.state || '') + '</td>' +
         '<td>' + l.bedrooms + 'BR / ' + l.bathrooms + 'BA</td>' +
         '<td style="font-weight:700;color:var(--green);">$' + l.price + '</td>' +
-        '<td>' + (l.warm_intro ? '<span class="badge badge-warm">Warm</span>' : '-') + '</td>' +
+        '<td>' + (l.warm_intro ? '<span class="badge badge-warm">Warm</span> ' : '') + (l.addon_agreement ? '<span class="badge" style="background:rgba(139,92,246,0.15);color:var(--purple);">Add-On</span>' : (!l.warm_intro ? '-' : '')) + '</td>' +
         '<td>' + (l.status === 'sold' ? '<span class="badge badge-sold">Sold</span><br><span style="font-size:11px;color:var(--text2);">' + escapeHtml(l.buyer_company || '') + '</span>' : '<span class="badge badge-available">Available</span>') + '</td>' +
         '<td>' +
           (l.status !== 'sold' ? '<button class="btn btn-sm btn-outline" onclick="editLead(' + l.id + ')">Edit</button> ' : '') +
@@ -705,7 +752,7 @@
   function renderAdminPurchases() {
     var body = document.getElementById('admin-purchases-body');
     if (allPurchases.length === 0) {
-      body.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--text2);">No sales yet.</td></tr>';
+      body.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text2);">No sales yet.</td></tr>';
       return;
     }
     body.innerHTML = allPurchases.map(function(p) {
@@ -717,6 +764,7 @@
         '<td>' + escapeHtml(p.city || '') + ', ' + escapeHtml(p.state || '') + '</td>' +
         '<td style="font-weight:700;color:var(--green);">$' + p.amount + '</td>' +
         '<td>' + (p.warm_intro_requested ? (p.warm_intro_sent ? '<span class="badge badge-available">Sent</span>' : '<span class="badge badge-warm">Pending</span>') : '-') + '</td>' +
+        '<td>' + (p.addon_agreement ? (p.addon_accepted ? '<span class="badge badge-available">Accepted</span>' : '<span class="badge badge-warm">Pending</span>') : '-') + '</td>' +
       '</tr>';
     }).join('');
   }
@@ -748,6 +796,7 @@
     document.getElementById('lead-description').value = '';
     document.getElementById('lead-notes').value = '';
     document.getElementById('lead-warm-intro').checked = false;
+    document.getElementById('lead-addon-agreement').checked = false;
     updatePricePreview();
     openModal('lead-modal');
   }
@@ -772,6 +821,7 @@
     document.getElementById('lead-description').value = l.description || '';
     document.getElementById('lead-notes').value = l.notes || '';
     document.getElementById('lead-warm-intro').checked = !!l.warm_intro;
+    document.getElementById('lead-addon-agreement').checked = !!l.addon_agreement;
     updatePricePreview();
     openModal('lead-modal');
   }
@@ -803,7 +853,8 @@
       display_name: document.getElementById('lead-display-name').value.trim(),
       description: document.getElementById('lead-description').value.trim(),
       notes: document.getElementById('lead-notes').value.trim(),
-      warm_intro: document.getElementById('lead-warm-intro').checked
+      warm_intro: document.getElementById('lead-warm-intro').checked,
+      addon_agreement: document.getElementById('lead-addon-agreement').checked
     };
 
     if (!data.owner_name || !data.property_address) {
@@ -988,6 +1039,7 @@
         '<div class="lead-details">' + escapeHtml(l.city || '') + ', ' + escapeHtml(l.state || '') + ' &middot; ' + l.bedrooms + ' Bed / ' + l.bathrooms + ' Bath &middot; ' + typeLabel + '</div>' +
         (l.description ? '<div style="font-size:12px;color:var(--text2);margin:6px 0;line-height:1.4;">' + escapeHtml(l.description) + '</div>' : '') +
         (l.warm_intro ? '<div class="warm-badge">&#x1F91D; Warm Intro Available</div>' : '') +
+        (l.addon_agreement ? '<div style="font-size:12px;color:var(--purple);font-weight:600;margin-top:4px;">&#x1F4DD; Add-On Agreement Required</div>' : '') +
         '<div style="font-size:11px;color:var(--text2);margin-top:6px;">Listed ' + new Date(l.created_at + 'Z').toLocaleDateString() + '</div>' +
         '<div class="lead-actions">' +
         (isSold ? '<div style="font-size:12px;font-weight:600;color:var(--red);">✅ Purchased by another PM</div>' :
@@ -1144,6 +1196,14 @@
             '<button class="btn btn-sm btn-gold" onclick="openWarmIntro(' + p.purchase_id + ')">Request Warm Introduction</button>'
           ) +
         '</div>' : '') +
+        (p.addon_agreement ? '<div style="margin-top:14px;padding:14px;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.25);border-radius:10px;">' +
+          '<div style="font-size:13px;font-weight:700;color:var(--purple);margin-bottom:6px;">Add-On Agreement</div>' +
+          (p.addon_accepted ?
+            '<div style="display:flex;align-items:center;gap:8px;"><span class="badge badge-available">Accepted</span><span style="font-size:11px;color:var(--text2);">' + new Date(p.addon_accepted_at + 'Z').toLocaleDateString() + '</span></div>' :
+            '<p style="font-size:12px;color:var(--text2);margin:0 0 10px 0;">This property includes an add-on agreement covering a closing bonus and cleaning commitment. Review and accept below.</p>' +
+            '<button class="btn btn-sm btn-purple" onclick="openAddonAgreement(' + p.purchase_id + ')">Review &amp; Accept Agreement</button>'
+          ) +
+        '</div>' : '') +
       '</div>';
     }).join('');
   }
@@ -1164,6 +1224,31 @@
       await pmFetch('/api/tl/pm/warm-intro', { method: 'POST', body: JSON.stringify({ purchase_id: parseInt(purchaseId), message: message }) });
       closeModal('warm-intro-modal');
       alert('Warm introduction requested! We will send the email shortly.');
+      loadPmData();
+    } catch(e) {
+      alert('Error: ' + e.message);
+    }
+  }
+
+  // Add-On Agreement
+  function openAddonAgreement(purchaseId) {
+    document.getElementById('addon-purchase-id').value = purchaseId;
+    document.getElementById('addon-agree-check').checked = false;
+    openModal('addon-agreement-modal');
+  }
+
+  async function acceptAddon() {
+    if (!document.getElementById('addon-agree-check').checked) {
+      alert('Please read and check the box to agree to the terms.');
+      return;
+    }
+    var purchaseId = document.getElementById('addon-purchase-id').value;
+    try {
+      var r = await pmFetch('/api/tl/pm/accept-addon', { method: 'POST', body: JSON.stringify({ purchase_id: parseInt(purchaseId) }) });
+      var result = await r.json();
+      if (result.error) { alert(result.error); return; }
+      closeModal('addon-agreement-modal');
+      alert('Add-On Agreement accepted! Thank you.');
       loadPmData();
     } catch(e) {
       alert('Error: ' + e.message);
