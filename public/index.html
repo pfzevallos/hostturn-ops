@@ -932,13 +932,13 @@
     
     async function toggleOwnerPaid(jobId, markPaid) {
       var endpoint = markPaid ? '/api/tracker/' + jobId + '/owner-paid' : '/api/tracker/' + jobId + '/owner-unpaid';
-      await fetch(endpoint, {method:'POST'});
+      await opsFetch(endpoint, {method:'POST'});
       loadPayments();
     }
-    
+
     async function toggleCleanerPaid(jobId, markPaid) {
       var endpoint = markPaid ? '/api/tracker/' + jobId + '/cleaner-paid' : '/api/tracker/' + jobId + '/cleaner-unpaid';
-      await fetch(endpoint, {method:'POST'});
+      await opsFetch(endpoint, {method:'POST'});
       loadPayments();
     }
 
