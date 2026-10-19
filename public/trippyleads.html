@@ -623,7 +623,9 @@
       confirmPurchase(params.get('session_id'));
     }
 
-    if (pmToken) {
+    if (params.get('admin') === 'true') {
+      showScreen('admin-login');
+    } else if (pmToken) {
       verifyPmSession();
     } else {
       showScreen('login');
