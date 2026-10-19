@@ -1404,12 +1404,21 @@ app.post("/api/tl/admin/leads", (req, res) => {
 app.post("/api/tl/admin/leads/:id", (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ error: "Unauthorized" });
   const db = getDb();
-  const { owner_name, owner_email, owner_phone, property_address, city, state, zip, bedrooms, bathrooms, property_type, listing_url, display_name, description, notes, warm_intro, price, addon_agreement, has_pm, current_pm } = req.body;
+  const { owner_name, owner_email, owner_phone, property_address, city, state, zip, bedrooms, bathrooms, property_type, listing_url, display_name, description, notes, warm_intro, addon_agreement, has_pm, current_pm } = req.body;
+
+  // Auto-calculate price from bedrooms (same logic as create)
+  const beds = parseInt(bedrooms) || 1;
+  let calcPrice = 250;
+  if (beds <= 2) calcPrice = 250;
+  else if (beds === 3) calcPrice = 350;
+  else if (beds === 4) calcPrice = 450;
+  else calcPrice = 550;
+  const finalPrice = req.body.price ? parseFloat(req.body.price) : calcPrice;
 
   db.prepare(`
     UPDATE tl_leads SET owner_name=?, owner_email=?, owner_phone=?, property_address=?, city=?, state=?, zip=?, bedrooms=?, bathrooms=?, property_type=?, listing_url=?, display_name=?, description=?, notes=?, warm_intro=?, price=?, addon_agreement=?, has_pm=?, current_pm=?, updated_at=datetime('now')
     WHERE id=?
-  `).run(owner_name, owner_email, owner_phone, property_address, city, state, zip, parseInt(bedrooms) || 1, parseFloat(bathrooms) || 1, property_type, listing_url, display_name || '', description || '', notes, warm_intro ? 1 : 0, parseFloat(price) || 250, addon_agreement ? 1 : 0, has_pm ? 1 : 0, current_pm || '', req.params.id);
+  `).run(owner_name, owner_email, owner_phone, property_address, city, state, zip, beds, parseFloat(bathrooms) || 1, property_type, listing_url, display_name || '', description || '', notes, warm_intro ? 1 : 0, finalPrice, addon_agreement ? 1 : 0, has_pm ? 1 : 0, current_pm || '', req.params.id);
 
   res.json({ ok: true });
 });
