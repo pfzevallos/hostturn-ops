@@ -876,6 +876,13 @@
       current_pm: document.getElementById('lead-current-pm').value.trim()
     };
 
+    // Calculate price based on bedrooms
+    var beds = parseInt(data.bedrooms) || 1;
+    if (beds <= 2) data.price = 250;
+    else if (beds === 3) data.price = 350;
+    else if (beds === 4) data.price = 450;
+    else data.price = 550;
+
     if (!data.owner_name || !data.property_address) {
       alert('Owner name and property address are required.');
       return;
