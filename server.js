@@ -1390,10 +1390,11 @@ app.post("/api/tl/admin/leads", (req, res) => {
   else if (beds === 4) price = 450;
   else price = 550;
 
+  const addon_agreement = req.body.addon_agreement ? 1 : 0;
   const result = db.prepare(`
-    INSERT INTO tl_leads (owner_name, owner_email, owner_phone, property_address, city, state, zip, bedrooms, bathrooms, property_type, listing_url, display_name, description, notes, warm_intro, price)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(owner_name || '', owner_email || '', owner_phone || '', property_address || '', city || '', state || '', zip || '', beds, parseFloat(bathrooms) || 1, property_type || 'entire_home', listing_url || '', display_name || '', description || '', notes || '', warm_intro ? 1 : 0, price);
+    INSERT INTO tl_leads (owner_name, owner_email, owner_phone, property_address, city, state, zip, bedrooms, bathrooms, property_type, listing_url, display_name, description, notes, warm_intro, price, addon_agreement)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(owner_name || '', owner_email || '', owner_phone || '', property_address || '', city || '', state || '', zip || '', beds, parseFloat(bathrooms) || 1, property_type || 'entire_home', listing_url || '', display_name || '', description || '', notes || '', warm_intro ? 1 : 0, price, addon_agreement);
 
   res.json({ ok: true, id: result.lastInsertRowid, price });
 });
@@ -1401,12 +1402,12 @@ app.post("/api/tl/admin/leads", (req, res) => {
 app.post("/api/tl/admin/leads/:id", (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ error: "Unauthorized" });
   const db = getDb();
-  const { owner_name, owner_email, owner_phone, property_address, city, state, zip, bedrooms, bathrooms, property_type, listing_url, display_name, description, notes, warm_intro, price } = req.body;
+  const { owner_name, owner_email, owner_phone, property_address, city, state, zip, bedrooms, bathrooms, property_type, listing_url, display_name, description, notes, warm_intro, price, addon_agreement } = req.body;
 
   db.prepare(`
-    UPDATE tl_leads SET owner_name=?, owner_email=?, owner_phone=?, property_address=?, city=?, state=?, zip=?, bedrooms=?, bathrooms=?, property_type=?, listing_url=?, display_name=?, description=?, notes=?, warm_intro=?, price=?, updated_at=datetime('now')
+    UPDATE tl_leads SET owner_name=?, owner_email=?, owner_phone=?, property_address=?, city=?, state=?, zip=?, bedrooms=?, bathrooms=?, property_type=?, listing_url=?, display_name=?, description=?, notes=?, warm_intro=?, price=?, addon_agreement=?, updated_at=datetime('now')
     WHERE id=?
-  `).run(owner_name, owner_email, owner_phone, property_address, city, state, zip, parseInt(bedrooms) || 1, parseFloat(bathrooms) || 1, property_type, listing_url, display_name || '', description || '', notes, warm_intro ? 1 : 0, parseFloat(price) || 250, req.params.id);
+  `).run(owner_name, owner_email, owner_phone, property_address, city, state, zip, parseInt(bedrooms) || 1, parseFloat(bathrooms) || 1, property_type, listing_url, display_name || '', description || '', notes, warm_intro ? 1 : 0, parseFloat(price) || 250, addon_agreement ? 1 : 0, req.params.id);
 
   res.json({ ok: true });
 });
@@ -1461,7 +1462,7 @@ app.get("/api/tl/admin/purchases", (req, res) => {
   if (!isAdmin(req)) return res.status(401).json({ error: "Unauthorized" });
   const db = getDb();
   const purchases = db.prepare(`
-    SELECT pu.*, l.owner_name, l.property_address, l.city, l.state, l.bedrooms,
+    SELECT pu.*, l.owner_name, l.property_address, l.city, l.state, l.bedrooms, l.addon_agreement,
       pm.company_name, pm.contact_name, pm.email as pm_email
     FROM tl_purchases pu
     JOIN tl_leads l ON pu.lead_id = l.id
@@ -1503,7 +1504,7 @@ app.get("/api/tl/pm/leads", (req, res) => {
 
   const leads = db.prepare(`
     SELECT id, city, state, bedrooms, bathrooms, property_type, warm_intro, price, status, created_at,
-      display_name, description
+      display_name, description, addon_agreement
     FROM tl_leads
     ORDER BY created_at DESC
   `).all();
@@ -1744,8 +1745,9 @@ app.get("/api/tl/pm/purchased", (req, res) => {
 
   const purchased = db.prepare(`
     SELECT pu.id as purchase_id, pu.purchased_at, pu.amount, pu.warm_intro_requested, pu.warm_intro_sent, pu.warm_intro_message,
+      pu.addon_accepted, pu.addon_accepted_at,
       l.owner_name, l.owner_email, l.owner_phone, l.property_address, l.city, l.state, l.zip,
-      l.bedrooms, l.bathrooms, l.property_type, l.listing_url, l.notes, l.warm_intro
+      l.bedrooms, l.bathrooms, l.property_type, l.listing_url, l.notes, l.warm_intro, l.addon_agreement
     FROM tl_purchases pu
     JOIN tl_leads l ON pu.lead_id = l.id
     WHERE pu.pm_id = ?
@@ -1766,6 +1768,22 @@ app.post("/api/tl/pm/warm-intro", (req, res) => {
   if (!purchase) return res.status(404).json({ error: "Purchase not found" });
 
   db.prepare("UPDATE tl_purchases SET warm_intro_requested=1, warm_intro_message=? WHERE id=?").run(message || '', purchase_id);
+  res.json({ ok: true });
+});
+
+// --- PM: Accept Add-On Agreement ---
+app.post("/api/tl/pm/accept-addon", (req, res) => {
+  const pmId = getPmFromToken(req);
+  if (!pmId) return res.status(401).json({ error: "Not authenticated" });
+  const db = getDb();
+  const { purchase_id } = req.body;
+
+  const purchase = db.prepare("SELECT pu.*, l.addon_agreement FROM tl_purchases pu JOIN tl_leads l ON pu.lead_id = l.id WHERE pu.id=? AND pu.pm_id=?").get(purchase_id, pmId);
+  if (!purchase) return res.status(404).json({ error: "Purchase not found" });
+  if (!purchase.addon_agreement) return res.status(400).json({ error: "This property does not have an add-on agreement" });
+  if (purchase.addon_accepted) return res.status(400).json({ error: "Add-on agreement already accepted" });
+
+  db.prepare("UPDATE tl_purchases SET addon_accepted=1, addon_accepted_at=datetime('now') WHERE id=?").run(purchase_id);
   res.json({ ok: true });
 });
 
