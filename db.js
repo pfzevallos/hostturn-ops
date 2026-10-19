@@ -294,6 +294,8 @@ function initTables() {
   try { db.exec("ALTER TABLE tl_leads ADD COLUMN display_name TEXT DEFAULT ''"); } catch(e) {}
   try { db.exec("ALTER TABLE tl_leads ADD COLUMN description TEXT DEFAULT ''"); } catch(e) {}
   try { db.exec("ALTER TABLE tl_leads ADD COLUMN addon_agreement INTEGER DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE tl_leads ADD COLUMN has_pm INTEGER DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE tl_leads ADD COLUMN current_pm TEXT DEFAULT ''"); } catch(e) {}
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS tl_property_managers (
