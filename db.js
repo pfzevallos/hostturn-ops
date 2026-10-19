@@ -293,6 +293,7 @@ function initTables() {
   // Migrations for tl_leads
   try { db.exec("ALTER TABLE tl_leads ADD COLUMN display_name TEXT DEFAULT ''"); } catch(e) {}
   try { db.exec("ALTER TABLE tl_leads ADD COLUMN description TEXT DEFAULT ''"); } catch(e) {}
+  try { db.exec("ALTER TABLE tl_leads ADD COLUMN addon_agreement INTEGER DEFAULT 0"); } catch(e) {}
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS tl_property_managers (
@@ -339,6 +340,10 @@ function initTables() {
       FOREIGN KEY (lead_id) REFERENCES tl_leads(id)
     )
   `);
+
+  // Migrations for tl_purchases (Add-On Agreement)
+  try { db.exec("ALTER TABLE tl_purchases ADD COLUMN addon_accepted INTEGER DEFAULT 0"); } catch(e) {}
+  try { db.exec("ALTER TABLE tl_purchases ADD COLUMN addon_accepted_at TEXT"); } catch(e) {}
 }
 
 module.exports = { getDb };
