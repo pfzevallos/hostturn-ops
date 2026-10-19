@@ -77,6 +77,62 @@
   </style>
 </head>
 <body>
+  <!-- Ops Login Gate -->
+  <div id="ops-login-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center;">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:40px;max-width:400px;width:90%;">
+      <h2 style="text-align:center;margin-bottom:8px;font-size:22px;">🔒 HostTurn Ops</h2>
+      <p style="text-align:center;color:var(--text2);font-size:14px;margin-bottom:24px;">Enter password to access the dashboard</p>
+      <div id="ops-login-error" style="color:var(--danger);font-size:13px;text-align:center;margin-bottom:12px;"></div>
+      <input type="password" id="ops-password" placeholder="Password" style="width:100%;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:15px;font-family:'DM Sans',sans-serif;margin-bottom:16px;" onkeydown="if(event.key==='Enter')opsLogin()">
+      <button onclick="opsLogin()" style="width:100%;padding:10px;background:var(--accent);color:#000;border:none;border-radius:8px;font-family:'DM Sans',sans-serif;font-weight:600;font-size:15px;cursor:pointer;">Sign In</button>
+    </div>
+  </div>
+  <script>
+    var opsToken = sessionStorage.getItem('ops_token') || '';
+    function opsLogin() {
+      var pw = document.getElementById('ops-password').value;
+      var errEl = document.getElementById('ops-login-error');
+      errEl.textContent = '';
+      if (!pw) { errEl.textContent = 'Please enter a password.'; return; }
+      fetch('/api/ops/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw })
+      }).then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+        .then(function(res) {
+          if (!res.ok) { errEl.textContent = res.data.error || 'Invalid password'; return; }
+          opsToken = res.data.token;
+          sessionStorage.setItem('ops_token', opsToken);
+          document.getElementById('ops-login-overlay').style.display = 'none';
+          document.getElementById('ops-main').style.display = 'block';
+          loadJobs();
+        }).catch(function() { errEl.textContent = 'Login failed. Try again.'; });
+    }
+    // Gate: show login or dashboard
+    (function() {
+      if (opsToken) {
+        // Verify token is still valid
+        fetch('/api/stats', { headers: { 'Authorization': 'Bearer ' + opsToken } })
+          .then(function(r) {
+            if (r.ok) {
+              document.getElementById('ops-login-overlay').style.display = 'none';
+              document.getElementById('ops-main').style.display = 'block';
+              loadJobs();
+            } else {
+              sessionStorage.removeItem('ops_token');
+              opsToken = '';
+              document.getElementById('ops-login-overlay').style.display = 'flex';
+              document.getElementById('ops-main').style.display = 'none';
+            }
+          });
+      } else {
+        document.getElementById('ops-login-overlay').style.display = 'flex';
+        document.getElementById('ops-main').style.display = 'none';
+      }
+    })();
+  </script>
+
+  <div id="ops-main" style="display:none;">
   <div class="header">
     <h1>Host<span>Turn</span> Ops</h1>
     <div class="status"><div class="dot"></div> System Live</div>
@@ -396,6 +452,14 @@
     </div>
   </div>
   <script>
+    // Authenticated fetch wrapper for Ops API
+    function opsFetch(url, opts) {
+      opts = opts || {};
+      opts.headers = opts.headers || {};
+      opts.headers['Authorization'] = 'Bearer ' + opsToken;
+      return fetch(url, opts);
+    }
+
     function getLocalDate(offset) {
       // Always use Eastern time (America/New_York) to match business operations
       var now = new Date();
@@ -586,10 +650,10 @@
       try {
         refreshDates();
         var results = await Promise.all([
-          fetch('/api/jobs?date=' + yesterdayDate).then(function(r){return r.json()}),
-          fetch('/api/jobs?date=' + todayDate).then(function(r){return r.json()}),
-          fetch('/api/jobs?date=' + tomorrowDate).then(function(r){return r.json()}),
-          fetch('/api/jobs?date=' + dayAfterDate).then(function(r){return r.json()})
+          opsFetch('/api/jobs?date=' + yesterdayDate).then(function(r){return r.json()}),
+          opsFetch('/api/jobs?date=' + todayDate).then(function(r){return r.json()}),
+          opsFetch('/api/jobs?date=' + tomorrowDate).then(function(r){return r.json()}),
+          opsFetch('/api/jobs?date=' + dayAfterDate).then(function(r){return r.json()})
         ]);
         yesterdayJobs = Array.isArray(results[0]) ? results[0] : [];
         todayJobs = Array.isArray(results[1]) ? results[1] : [];
@@ -605,7 +669,7 @@
         document.getElementById('count-today').textContent = todayJobs.length;
         document.getElementById('count-tomorrow').textContent = tomorrowJobs.length;
         document.getElementById('count-dayafter').textContent = dayAfterJobs.length;
-        try { var p = await (await fetch('/api/properties/count')).json(); document.getElementById('s-props').textContent = p.count || '--'; } catch(e){}
+        try { var p = await (await opsFetch('/api/properties/count')).json(); document.getElementById('s-props').textContent = p.count || '--'; } catch(e){}
         renderJobs();
         // Refresh button states
         switchTab(currentTab);
@@ -615,12 +679,12 @@
     }
 
     async function toggleArrival(jobId) {
-      await fetch('/api/jobs/' + jobId + '/arrival-confirmed', {method:'POST'});
+      await opsFetch('/api/jobs/' + jobId + '/arrival-confirmed', {method:'POST'});
       loadAllJobs();
     }
     
     async function toggleReport(jobId) {
-      await fetch('/api/jobs/' + jobId + '/report-verified', {method:'POST'});
+      await opsFetch('/api/jobs/' + jobId + '/report-verified', {method:'POST'});
       loadAllJobs();
     }
 
@@ -629,12 +693,12 @@
       btn.disabled = true; btn.textContent = 'Syncing...';
       try {
         refreshDates();
-        await fetch('/api/sync/properties', {method:'POST'});
+        await opsFetch('/api/sync/properties', {method:'POST'});
         var results = await Promise.all([
-          fetch('/api/sync/tasks', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:yesterdayDate})}).then(function(r){return r.json()}),
-          fetch('/api/sync/tasks', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:todayDate})}).then(function(r){return r.json()}),
-          fetch('/api/sync/tasks', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:tomorrowDate})}).then(function(r){return r.json()}),
-          fetch('/api/sync/tasks', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:dayAfterDate})}).then(function(r){return r.json()})
+          opsFetch('/api/sync/tasks', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:yesterdayDate})}).then(function(r){return r.json()}),
+          opsFetch('/api/sync/tasks', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:todayDate})}).then(function(r){return r.json()}),
+          opsFetch('/api/sync/tasks', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:tomorrowDate})}).then(function(r){return r.json()}),
+          opsFetch('/api/sync/tasks', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:dayAfterDate})}).then(function(r){return r.json()})
         ]);
         btn.textContent = 'Synced: ' + results[0].count + '/' + results[1].count + '/' + results[2].count + '/' + results[3].count;
         setTimeout(function(){ btn.textContent = 'Sync Breezeway'; btn.disabled = false; }, 3000);
@@ -668,7 +732,7 @@
       var btn = document.getElementById('send-btn');
       btn.disabled = true; btn.textContent = 'Sending...';
       try {
-        var r = await fetch('/api/send-schedule', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:activeDate})});
+        var r = await opsFetch('/api/send-schedule', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:activeDate})});
         var data = await r.json();
         if (data.error) { btn.textContent = 'Error: ' + data.error; btn.disabled = false; }
         else {
@@ -697,7 +761,7 @@
       var btn = document.getElementById('owner-btn');
       btn.disabled = true; btn.textContent = 'Sending...';
       try {
-        var r = await fetch('/api/send-owner-notifications', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:activeDate})});
+        var r = await opsFetch('/api/send-owner-notifications', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:activeDate})});
         var data = await r.json();
         if (data.error) { btn.textContent = 'Error: ' + data.error; btn.disabled = false; }
         else {
@@ -724,7 +788,7 @@
       var btn = document.getElementById('closeout-btn');
       btn.disabled = true; btn.textContent = 'Sending...';
       try {
-        var r = await fetch('/api/send-closeout-emails-batch', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:date})});
+        var r = await opsFetch('/api/send-closeout-emails-batch', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({date:date})});
         var data = await r.json();
         if (data.error) { btn.textContent = 'Error: ' + data.error; }
         else { btn.textContent = 'Sent ' + data.sent + ' close-out emails!'; }
@@ -755,7 +819,7 @@
       var start = document.getElementById('p-start').value || ninetyDaysAgo;
       var end = document.getElementById('p-end').value || todayDate;
       try {
-        var r = await fetch('/api/payment-tracker?start=' + start + '&end=' + end);
+        var r = await opsFetch('/api/payment-tracker?start=' + start + '&end=' + end);
         paymentData = await r.json();
         // Update summary stats
         var s = paymentData.summary || {};
@@ -977,7 +1041,7 @@
       };
       if (editId) data.id = editId;
       
-      await fetch('/api/prospects', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+      await opsFetch('/api/prospects', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
       
       // Reset form
       document.getElementById('calc-edit-id').value = '';
@@ -999,7 +1063,7 @@
     
     async function loadProspects() {
       try {
-        var r = await fetch('/api/prospects');
+        var r = await opsFetch('/api/prospects');
         var prospects = await r.json();
         renderProspects(prospects);
       } catch(e) {
@@ -1039,7 +1103,7 @@
     }
     
     async function editProspect(id) {
-      var r = await fetch('/api/prospects/' + id);
+      var r = await opsFetch('/api/prospects/' + id);
       var p = await r.json();
       
       document.getElementById('calc-edit-id').value = p.id;
@@ -1061,13 +1125,13 @@
     }
     
     async function setProspectStatus(id, status) {
-      await fetch('/api/prospects/' + id + '/status', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({status:status})});
+      await opsFetch('/api/prospects/' + id + '/status', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({status:status})});
       loadProspects();
     }
     
     async function deleteProspect(id) {
       if (!confirm('Delete this prospect?')) return;
-      await fetch('/api/prospects/' + id, {method:'DELETE'});
+      await opsFetch('/api/prospects/' + id, {method:'DELETE'});
       loadProspects();
     }
 
@@ -1082,11 +1146,11 @@
     var homeNoteCounts = {};
     async function loadHomes() {
       try {
-        var r = await fetch('/api/properties/all');
+        var r = await opsFetch('/api/properties/all');
         allHomes = await r.json();
         document.getElementById('homes-count').textContent = allHomes.length;
         try {
-          var nc = await fetch('/api/properties/notes-counts');
+          var nc = await opsFetch('/api/properties/notes-counts');
           homeNoteCounts = await nc.json();
         } catch(e2) { homeNoteCounts = {}; }
         renderHomes();
@@ -1246,9 +1310,9 @@
       };
       
       if (editId) {
-        await fetch('/api/properties/' + editId + '/update', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+        await opsFetch('/api/properties/' + editId + '/update', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
       } else {
-        await fetch('/api/properties/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+        await opsFetch('/api/properties/add', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
       }
       
       cancelEditHome();
@@ -1259,7 +1323,7 @@
       var container = document.getElementById('home-notes-list');
       container.innerHTML = '<div style="text-align:center;color:var(--text2);padding:12px;font-size:13px;">Loading notes...</div>';
       try {
-        var r = await fetch('/api/properties/' + propertyId + '/notes');
+        var r = await opsFetch('/api/properties/' + propertyId + '/notes');
         var notes = await r.json();
         if (!notes.length) {
           container.innerHTML = '<div style="text-align:center;color:var(--text2);padding:20px;font-size:13px;">No notes yet. Add your first note above.</div>';
@@ -1289,7 +1353,7 @@
       var note = input.value.trim();
       if (!note) { input.focus(); return; }
       try {
-        await fetch('/api/properties/' + propertyId + '/notes', {
+        await opsFetch('/api/properties/' + propertyId + '/notes', {
           method: 'POST',
           headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({ note: note })
@@ -1306,7 +1370,7 @@
       var propertyId = document.getElementById('home-edit-id').value;
       if (!propertyId || !confirm('Delete this note?')) return;
       try {
-        await fetch('/api/properties/' + propertyId + '/notes/' + noteId, { method: 'DELETE' });
+        await opsFetch('/api/properties/' + propertyId + '/notes/' + noteId, { method: 'DELETE' });
         loadPropertyNotes(propertyId);
         refreshNoteCounts();
       } catch(e) {
@@ -1316,7 +1380,7 @@
 
     async function refreshNoteCounts() {
       try {
-        var nc = await fetch('/api/properties/notes-counts');
+        var nc = await opsFetch('/api/properties/notes-counts');
         homeNoteCounts = await nc.json();
         renderHomes();
       } catch(e) {}
@@ -1328,5 +1392,6 @@
       return div.innerHTML;
     }
   </script>
+  </div><!-- /ops-main -->
 </body>
 </html>
