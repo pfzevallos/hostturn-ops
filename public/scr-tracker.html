@@ -271,7 +271,7 @@
 <body>
 
 <!-- Ops Login Gate -->
-<div id="ops-login-overlay" style="display:none; position:fixed; inset:0; z-index:9999; background:#0f1117; display:flex; align-items:center; justify-content:center;">
+<div id="ops-login-overlay" style="display:none; position:fixed; inset:0; z-index:9999; background:#0f1117; align-items:center; justify-content:center;">
   <div style="background:#1a1d27; border:1px solid #2e3348; border-radius:16px; padding:40px; max-width:400px; width:90%; text-align:center;">
     <h2 style="font-size:22px; font-weight:700; margin-bottom:8px; color:#e4e6f0;">&#x1F512; Ops Access Required</h2>
     <p style="color:#8b8fa8; font-size:14px; margin-bottom:24px;">Enter the operations password to continue</p>
@@ -296,6 +296,7 @@ var opsToken = sessionStorage.getItem('ops_token') || '';
   fetch('/api/stats', { headers: { 'Authorization': 'Bearer ' + opsToken } })
     .then(function(r) {
       if (r.ok) {
+        document.getElementById('ops-login-overlay').style.display = 'none';
         document.getElementById('ops-main').style.display = '';
       } else {
         sessionStorage.removeItem('ops_token');
