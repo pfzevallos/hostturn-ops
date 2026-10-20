@@ -344,8 +344,7 @@ function opsLogin() {
 
 <div class="container">
   <div class="info-note">
-    <strong>Pay Schedule:</strong> SCR pays every Tuesday for the previous Wed&ndash;Tue period.
-    First payment (Oct 13): covers Oct 8&ndash;13 only (Wed Oct 7 was already paid separately).
+    <strong>Pay Schedule:</strong> SCR pay periods run Tuesday&ndash;Monday. Payment is due each Tuesday for the prior Tue&ndash;Mon period.
   </div>
 
   <div class="summary-row" id="summary-cards">
@@ -369,35 +368,35 @@ function opsLogin() {
     .filter(j => j.tags && j.tags.includes('SCR') && j.bw_status === 'Finished')
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  // Pay period calculation
+  // Pay period calculation — Tue through Mon periods
   function getPayPeriod(dateStr) {
     const d = new Date(dateStr + 'T12:00:00');
 
-    // Pre-schedule: before Oct 8
-    if (d < new Date('2026-10-08T12:00:00')) {
-      return { start: '2026-09-25', end: '2026-10-07', payDate: null, label: 'Payment 1 (Special)', special: true };
+    // Pre-schedule: before Oct 6 (first Tue-Mon period starts Oct 6)
+    if (d < new Date('2026-10-06T12:00:00')) {
+      return { start: '2026-09-25', end: '2026-10-05', payDate: null, label: 'Pre-Schedule', special: true };
     }
 
-    // Special first period: Oct 8&ndash;13
-    if (d <= new Date('2026-10-13T12:00:00')) {
-      return { start: '2026-10-08', end: '2026-10-13', payDate: '2026-10-13', label: 'Payment 2 (Special)', special: true };
-    }
-
-    // Regular Wed&ndash;Tue periods
-    const dow = d.getDay(); // 0=Sun
-    let daysToTue;
-    if (dow <= 2) { daysToTue = 2 - dow; }
-    else { daysToTue = (2 + 7 - dow); }
+    // Regular Tue&ndash;Mon periods
+    // Find the Monday that ends this period (day 1 = Mon)
+    const dow = d.getDay(); // 0=Sun, 1=Mon, 2=Tue, ...
+    let daysToMon;
+    if (dow === 0) { daysToMon = 1; } // Sun -> next Mon
+    else if (dow === 1) { daysToMon = 0; } // Mon -> this Mon
+    else { daysToMon = (8 - dow); } // Tue(2)->6, Wed(3)->5, Thu(4)->4, Fri(5)->3, Sat(6)->2
     const endDate = new Date(d);
-    endDate.setDate(endDate.getDate() + daysToTue);
+    endDate.setDate(endDate.getDate() + daysToMon);
     const startDate = new Date(endDate);
-    startDate.setDate(startDate.getDate() - 6);
+    startDate.setDate(startDate.getDate() - 6); // Tue = Mon - 6
 
     const fmt = dt => dt.toISOString().split('T')[0];
+    // Payment due the Tuesday after the period ends
+    const payDate = new Date(endDate);
+    payDate.setDate(payDate.getDate() + 1);
     return {
       start: fmt(startDate),
       end: fmt(endDate),
-      payDate: fmt(endDate),
+      payDate: fmt(payDate),
       label: null,
       special: false
     };
@@ -464,7 +463,7 @@ function opsLogin() {
     <div class="summary-card">
       <div class="label">Pay Periods</div>
       <div class="value blue">${totalPeriods}</div>
-      <div class="sub">Tue payment cycles</div>
+      <div class="sub">Tue&ndash;Mon cycles</div>
     </div>
     <div class="summary-card">
       <div class="label">SCR Properties</div>
