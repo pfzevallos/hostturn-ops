@@ -32,6 +32,7 @@
     .tl-logo img { height:44px; width:auto; }
     .tl-header-actions { display:flex; gap:10px; align-items:center; }
     .tl-header .user-badge { background:var(--surface2); padding:6px 14px; border-radius:20px; font-size:13px; color:var(--text); border:1px solid var(--border); }
+    .beta-badge { display:inline-block; background:#f59e0b; color:#fff; font-size:10px; font-weight:700; letter-spacing:1px; padding:2px 8px; border-radius:4px; vertical-align:middle; margin-left:8px; }
 
     /* Buttons */
     .btn { padding:8px 18px; border:none; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; transition:all 0.2s; display:inline-flex; align-items:center; gap:6px; }
@@ -645,13 +646,14 @@
     } else if (name === 'login') {
       document.getElementById('login-screen').style.display = 'block';
       document.getElementById('header-actions').innerHTML = '';
-      document.getElementById('tl-subtitle').textContent = 'STR Owner Lead Marketplace';
+      document.getElementById('tl-subtitle').innerHTML = 'STR Owner Lead Marketplace <span class="beta-badge">BETA</span>';
     } else if (name === 'admin') {
       document.getElementById('admin-screen').style.display = 'block';
       document.getElementById('tl-subtitle').textContent = 'STR Owner Lead Marketplace by HostTurn';
       document.getElementById('header-actions').innerHTML = '<span class="user-badge">Admin</span> <button class="btn btn-outline btn-sm" onclick="location.href=\'/trippyleads.html\'">PM View</button> <a href="/" class="btn btn-outline btn-sm" style="text-decoration:none;">Ops Dashboard</a>';
     } else if (name === 'pm') {
       document.getElementById('pm-screen').style.display = 'block';
+      document.getElementById('tl-subtitle').innerHTML = 'STR Owner Lead Marketplace <span class="beta-badge">BETA</span>';
       var name = pmData ? pmData.company_name || pmData.contact_name : '';
       document.getElementById('header-actions').innerHTML = '<span class="user-badge">' + escapeHtml(name) + '</span> <button class="btn btn-outline btn-sm" onclick="pmLogout()">Sign Out</button>';
     }
