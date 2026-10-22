@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+hh  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TrippyLeads - STR Owner Lead Marketplace</title>
   <style>
     :root {
@@ -737,7 +737,7 @@
         '<td>' + escapeHtml(l.city || '') + ', ' + escapeHtml(l.state || '') + '</td>' +
         '<td>' + l.bedrooms + 'BR / ' + l.bathrooms + 'BA</td>' +
         '<td style="font-weight:700;color:var(--green);">$' + l.price + '</td>' +
-        '<td>' + (l.warm_intro ? '<span class="badge badge-warm">Warm</span> ' : '') + (l.addon_agreement ? '<span class="badge" style="background:rgba(139,92,246,0.15);color:var(--purple);">Add-On</span> ' : '') + (l.has_pm ? '<span class="badge badge-sold" style="font-size:10px;">PM: ' + escapeHtml(l.current_pm || 'Yes') + '</span>' : '<span class="badge badge-available" style="font-size:10px;">No PM / Unknown</span>') + (!l.warm_intro && !l.addon_agreement && !l.has_pm ? ' -' : '') + '</td>' +
+        '<td>' + (l.warm_intro ? '<span class="badge badge-warm">Warm</span> ' : '') + (l.addon_agreement ? '<span class="badge" style="background:rgba(139,92,246,0.15);color:var(--purple);">Add-On</span> ' : '') + (l.has_pm ? '<span class="badge badge-sold" style="font-size:10px;">PM: ' + escapeHtml(l.current_pm || 'Yes') + '</span>' : '<span class="badge badge-available" style="font-size:10px;">No PM / Unknown / Unknown</span>') + (!l.warm_intro && !l.addon_agreement && !l.has_pm ? ' -' : '') + '</td>' +
         '<td>' + (l.status === 'sold' ? '<span class="badge badge-sold">Sold</span><br><span style="font-size:11px;color:var(--text2);">' + escapeHtml(l.buyer_company || '') + '</span>' : '<span class="badge badge-available">Available</span>') + '</td>' +
         '<td>' +
           (l.status !== 'sold' ? '<button class="btn btn-sm btn-outline" onclick="editLead(' + l.id + ')">Edit</button> ' : '') +
@@ -1068,7 +1068,7 @@
         (l.description ? '<div style="font-size:12px;color:var(--text2);margin:6px 0;line-height:1.4;">' + escapeHtml(l.description) + '</div>' : '') +
         (l.warm_intro ? '<div class="warm-badge">&#x1F91D; Warm Intro Available</div>' : '') +
         (l.addon_agreement ? '<div style="font-size:12px;color:var(--purple);font-weight:600;margin-top:4px;">&#x1F4DD; Add-On Agreement Required</div>' : '') +
-        '<div style="margin-top:4px;">' + (l.has_pm ? '<span class="badge badge-sold" style="font-size:11px;">Has PM</span>' : '<span class="badge badge-available" style="font-size:11px;">No PM / Unknown</span>') + '</div>' +
+        '<div style="margin-top:4px;">' + (l.has_pm ? '<span class="badge badge-sold" style="font-size:11px;">Has PM</span>' : '<span class="badge badge-available" style="font-size:11px;">No PM / Unknown / Unknown</span>') + '</div>' +
         '<div style="font-size:11px;color:var(--text2);margin-top:6px;">Listed ' + new Date(l.created_at + 'Z').toLocaleDateString() + '</div>' +
         '<div class="lead-actions">' +
         (isSold ? '<div style="font-size:12px;font-weight:600;color:var(--red);">✅ Purchased by another PM</div>' :
