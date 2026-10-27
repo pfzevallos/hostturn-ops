@@ -854,10 +854,6 @@
   function updatePricePreview() {
     var beds = parseInt(document.getElementById('lead-bedrooms').value) || 1;
     var price = 250;
-    if (beds <= 2) price = 250;
-    else if (beds === 3) price = 350;
-    else if (beds === 4) price = 450;
-    else price = 550;
     document.getElementById('lead-price-display').textContent = '$' + price;
   }
   document.getElementById('lead-bedrooms').addEventListener('change', updatePricePreview);
@@ -884,12 +880,8 @@
       current_pm: document.getElementById('lead-current-pm').value.trim()
     };
 
-    // Calculate price based on bedrooms
-    var beds = parseInt(data.bedrooms) || 1;
-    if (beds <= 2) data.price = 250;
-    else if (beds === 3) data.price = 350;
-    else if (beds === 4) data.price = 450;
-    else data.price = 550;
+    // Flat price for all leads
+    data.price = 250;
 
     if (!data.owner_name || !data.property_address) {
       alert('Owner name and property address are required.');
